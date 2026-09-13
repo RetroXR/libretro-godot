@@ -190,16 +190,12 @@ public:
     /// resolution, so read it per frame instead of caching it.
     godot::Ref<godot::ImageTexture> GetVideoTexture() const;
 
-    /// Whether this core hands its VMU screens over separately instead of
-    /// drawing them into the picture. Only our flycast fork does; a frontend
-    /// that gets false must fall back to cropping the overlay out of the frame,
-    /// and to switching that overlay on in the first place.
-    bool HasVmuScreens() const;
-    /// One VMU's own 48 x 32 LCD, or null when this core publishes none or that
-    /// card has not drawn yet. `index` is bus * 2 + port, so an even index is
-    /// the slot-1 card -- the one whose screen a real controller has a window
-    /// for.
-    godot::Ref<godot::ImageTexture> GetVmuScreenTexture(int index);
+    /// Whether the core asked for the controller display interface, which it
+    /// uses to hand device screens such as a VMU's LCD over separately.
+    bool HasControllerScreens() const;
+    /// The screen of device `index` on controller `port` -- for a Dreamcast, the
+    /// card in expansion slot `index` -- or null until the core has pushed one.
+    godot::Ref<godot::ImageTexture> GetControllerScreenTexture(int port, int index);
 
     /// The same frame as a CPU-side Image — the buffer the texture was uploaded
     /// FROM, so reading it costs no GPU readback. A savestate thumbnail wants

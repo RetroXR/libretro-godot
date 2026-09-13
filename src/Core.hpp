@@ -60,20 +60,6 @@ public:
     decltype(&::retro_get_memory_data) retro_get_memory_data                       = nullptr;
     decltype(&::retro_get_memory_size) retro_get_memory_size                       = nullptr;
 
-    /// The VMU LCDs, out of band. OPTIONAL, and only our flycast fork exports
-    /// it: stock flycast can publish a VMU screen only by compositing it into
-    /// the finished frame at a corner, which means a frontend that wants the
-    /// screen somewhere of its own has to crop it back out and the game loses
-    /// those pixels for good. Null on every other core and on a stock build,
-    /// which is not an error -- the caller falls back to the crop.
-    ///
-    /// (vmu = bus * 2 + port, 0..7; pixels = 48 * 32 words of 0xAABBGGRR;
-    /// count = that buffer's length in words; a null pixels with count 0 asks
-    /// for the change stamp alone.) Call it only from the thread that calls
-    /// retro_run: the core writes it from its emulation thread under no lock.
-    using FlycastGetVmuScreen = bool(RETRO_CALLCONV*)(unsigned, uint32_t*, size_t, uint64_t*);
-    FlycastGetVmuScreen flycast_get_vmu_screen                                     = nullptr;
-
     bool SetSupportsNoGame(bool* supports);
     bool GetLibretroPath(const char** path) const;
 

@@ -187,10 +187,6 @@ bool Core::Load(CallbackTrampolines* trampolines)
     LoadFunction(retro_get_memory_data);
     LoadFunction(retro_get_memory_size);
 
-    // Optional, so no LoadFunction: a core without it is every core but our own
-    // flycast build, and that has to keep working.
-    LoadOptionalFunction_(flycast_get_vmu_screen, "flycast_get_vmu_screen");
-
     // Cache need_fullpath before retro_init: it decides whether Wrapper hands the
     // core a byte buffer or just a path. Disc cores set it and open the image
     // themselves (VFS), so filling a multi-GB buffer for them is pure waste.

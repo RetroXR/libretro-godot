@@ -164,6 +164,7 @@ void Wrapper::StartSubsystemContent(const std::string& root_directory, const std
     }
 
     ClearCoreIdentity();
+    m_controller_screens_offered.store(false, std::memory_order_relaxed);
 
     m_stop_requested = false;
     m_thread_exited = false;
@@ -271,75 +272,86 @@ Ref<Image> Wrapper::GetVideoImage() const
     return m_video_handler ? m_video_handler->GetImage() : Ref<Image>();
 }
 
-bool Wrapper::HasVmuScreens() const
+bool Wrapper::HasControllerScreens() const
 {
-    return m_core != nullptr && m_core->flycast_get_vmu_screen != nullptr;
+    return m_controller_screens_offered.load(std::memory_order_relaxed);
 }
 
-Ref<ImageTexture> Wrapper::GetVmuScreenTexture(int index)
+void Wrapper::NoteControllerScreensOffered()
 {
-    if (index < 0 || index >= VMU_SCREEN_COUNT)
+    std::lock_guard<std::mutex> lock(m_controller_screen_mutex);
+    // Emptied rather than erased: a texture may only be freed on the main thread.
+    for (auto& [key, screen] : m_controller_screens)
+    {
+        screen.pixels.clear();
+        screen.stamp = 0;
+        screen.seen = 0;
+    }
+    m_controller_screens_offered.store(true, std::memory_order_relaxed);
+}
+
+bool Wrapper::StoreControllerScreen(unsigned port, unsigned index, const uint32_t* pixels,
+                                    unsigned width, unsigned height)
+{
+    if (!pixels || width == 0 || height == 0 || width > 4096 || height > 4096)
+        return false;
+    const uint64_t key = (static_cast<uint64_t>(port) << 32) | index;
+    std::lock_guard<std::mutex> lock(m_controller_screen_mutex);
+    ControllerScreen& screen = m_controller_screens[key];
+    screen.width = width;
+    screen.height = height;
+    screen.pixels.assign(pixels, pixels + static_cast<size_t>(width) * height);
+    ++screen.stamp;
+    return true;
+}
+
+Ref<ImageTexture> Wrapper::GetControllerScreenTexture(int port, int index)
+{
+    if (port < 0 || index < 0)
         return Ref<ImageTexture>();
+    const uint64_t key = (static_cast<uint64_t>(port) << 32) | static_cast<uint32_t>(index);
 
     PackedByteArray bytes;
+    unsigned width = 0;
+    unsigned height = 0;
     uint64_t stamp = 0;
     {
-        std::lock_guard<std::mutex> lock(m_vmu_screen_mutex);
-        // Never drawn. Not the same as an all-off screen, which is a card that
-        // is present and dark, so there is nothing to hand back rather than a
-        // black texture that would read as one.
-        if (m_vmu_screen_pixels[index].empty())
+        std::lock_guard<std::mutex> lock(m_controller_screen_mutex);
+        auto it = m_controller_screens.find(key);
+        if (it == m_controller_screens.end() || it->second.pixels.empty())
             return Ref<ImageTexture>();
-        stamp = m_vmu_screen_stamp[index];
-        if (m_vmu_screen_tex[index].is_valid() && stamp == m_vmu_screen_seen[index])
-            return m_vmu_screen_tex[index];
-        const size_t size = m_vmu_screen_pixels[index].size() * sizeof(uint32_t);
-        bytes.resize(static_cast<int64_t>(size));
-        std::memcpy(bytes.ptrw(), m_vmu_screen_pixels[index].data(), size);
+        ControllerScreen& screen = it->second;
+        if (screen.texture.is_valid() && screen.stamp == screen.seen)
+            return screen.texture;
+        width = screen.width;
+        height = screen.height;
+        stamp = screen.stamp;
+        bytes.resize(static_cast<int64_t>(screen.pixels.size()) * 4);
+        uint8_t* dst = bytes.ptrw();
+        for (uint32_t px : screen.pixels)
+        {
+            *dst++ = static_cast<uint8_t>(px >> 16);
+            *dst++ = static_cast<uint8_t>(px >> 8);
+            *dst++ = static_cast<uint8_t>(px);
+            *dst++ = 255;
+        }
     }
 
-    // The core packs R | G << 8 | B << 16 | A << 24, which on a little-endian
-    // machine is R, G, B, A in memory order -- so RGBA8 and no swizzle.
     Ref<Image> image = Image::create_from_data(
-        VMU_SCREEN_W, VMU_SCREEN_H, false, Image::FORMAT_RGBA8, bytes);
+        static_cast<int32_t>(width), static_cast<int32_t>(height), false, Image::FORMAT_RGBA8, bytes);
     if (image.is_null())
         return Ref<ImageTexture>();
 
-    if (m_vmu_screen_tex[index].is_valid())
-        m_vmu_screen_tex[index]->update(image);
+    std::lock_guard<std::mutex> lock(m_controller_screen_mutex);
+    ControllerScreen& screen = m_controller_screens[key];
+    // update() keeps a texture's size, so a resized screen gets a new one.
+    if (screen.texture.is_valid() && screen.texture->get_width() == static_cast<int32_t>(width)
+            && screen.texture->get_height() == static_cast<int32_t>(height))
+        screen.texture->update(image);
     else
-        m_vmu_screen_tex[index] = ImageTexture::create_from_image(image);
-    m_vmu_screen_seen[index] = stamp;
-    return m_vmu_screen_tex[index];
-}
-
-void Wrapper::PublishVmuScreens()
-{
-    if (m_core == nullptr || m_core->flycast_get_vmu_screen == nullptr)
-        return;
-
-    for (int i = 0; i < VMU_SCREEN_COUNT; ++i)
-    {
-        // Stamp first. Copying eight panels every frame would be 48 KB of the
-        // same pixels sixty times a second; the stamp says which of them moved.
-        uint64_t changed = 0;
-        if (!m_core->flycast_get_vmu_screen(
-                static_cast<unsigned>(i), nullptr, 0, &changed))
-            continue;
-        {
-            std::lock_guard<std::mutex> lock(m_vmu_screen_mutex);
-            if (!m_vmu_screen_pixels[i].empty() && changed == m_vmu_screen_stamp[i])
-                continue;
-        }
-
-        uint32_t pixels[VMU_SCREEN_W * VMU_SCREEN_H] = {};
-        if (!m_core->flycast_get_vmu_screen(
-                static_cast<unsigned>(i), pixels, std::size(pixels), &changed))
-            continue;
-        std::lock_guard<std::mutex> lock(m_vmu_screen_mutex);
-        m_vmu_screen_stamp[i] = changed;
-        m_vmu_screen_pixels[i].assign(pixels, pixels + std::size(pixels));
-    }
+        screen.texture = ImageTexture::create_from_image(image);
+    screen.seen = stamp;
+    return screen.texture;
 }
 
 void Wrapper::SetAudioPlaying(bool playing)
