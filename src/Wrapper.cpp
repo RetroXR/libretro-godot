@@ -5,6 +5,8 @@
 #include <godot_cpp/classes/global_constants.hpp>
 #include <godot_cpp/classes/os.hpp>
 #include <godot_cpp/classes/audio_stream_player3d.hpp>
+#include <godot_cpp/classes/image.hpp>
+#include <godot_cpp/classes/image_texture.hpp>
 
 #include <filesystem>
 #include <fstream>
@@ -267,6 +269,77 @@ Ref<ImageTexture> Wrapper::GetVideoTexture() const
 Ref<Image> Wrapper::GetVideoImage() const
 {
     return m_video_handler ? m_video_handler->GetImage() : Ref<Image>();
+}
+
+bool Wrapper::HasVmuScreens() const
+{
+    return m_core != nullptr && m_core->flycast_get_vmu_screen != nullptr;
+}
+
+Ref<ImageTexture> Wrapper::GetVmuScreenTexture(int index)
+{
+    if (index < 0 || index >= VMU_SCREEN_COUNT)
+        return Ref<ImageTexture>();
+
+    PackedByteArray bytes;
+    uint64_t stamp = 0;
+    {
+        std::lock_guard<std::mutex> lock(m_vmu_screen_mutex);
+        // Never drawn. Not the same as an all-off screen, which is a card that
+        // is present and dark, so there is nothing to hand back rather than a
+        // black texture that would read as one.
+        if (m_vmu_screen_pixels[index].empty())
+            return Ref<ImageTexture>();
+        stamp = m_vmu_screen_stamp[index];
+        if (m_vmu_screen_tex[index].is_valid() && stamp == m_vmu_screen_seen[index])
+            return m_vmu_screen_tex[index];
+        const size_t size = m_vmu_screen_pixels[index].size() * sizeof(uint32_t);
+        bytes.resize(static_cast<int64_t>(size));
+        std::memcpy(bytes.ptrw(), m_vmu_screen_pixels[index].data(), size);
+    }
+
+    // The core packs R | G << 8 | B << 16 | A << 24, which on a little-endian
+    // machine is R, G, B, A in memory order -- so RGBA8 and no swizzle.
+    Ref<Image> image = Image::create_from_data(
+        VMU_SCREEN_W, VMU_SCREEN_H, false, Image::FORMAT_RGBA8, bytes);
+    if (image.is_null())
+        return Ref<ImageTexture>();
+
+    if (m_vmu_screen_tex[index].is_valid())
+        m_vmu_screen_tex[index]->update(image);
+    else
+        m_vmu_screen_tex[index] = ImageTexture::create_from_image(image);
+    m_vmu_screen_seen[index] = stamp;
+    return m_vmu_screen_tex[index];
+}
+
+void Wrapper::PublishVmuScreens()
+{
+    if (m_core == nullptr || m_core->flycast_get_vmu_screen == nullptr)
+        return;
+
+    for (int i = 0; i < VMU_SCREEN_COUNT; ++i)
+    {
+        // Stamp first. Copying eight panels every frame would be 48 KB of the
+        // same pixels sixty times a second; the stamp says which of them moved.
+        uint64_t changed = 0;
+        if (!m_core->flycast_get_vmu_screen(
+                static_cast<unsigned>(i), nullptr, 0, &changed))
+            continue;
+        {
+            std::lock_guard<std::mutex> lock(m_vmu_screen_mutex);
+            if (!m_vmu_screen_pixels[i].empty() && changed == m_vmu_screen_stamp[i])
+                continue;
+        }
+
+        uint32_t pixels[VMU_SCREEN_W * VMU_SCREEN_H] = {};
+        if (!m_core->flycast_get_vmu_screen(
+                static_cast<unsigned>(i), pixels, std::size(pixels), &changed))
+            continue;
+        std::lock_guard<std::mutex> lock(m_vmu_screen_mutex);
+        m_vmu_screen_stamp[i] = changed;
+        m_vmu_screen_pixels[i].assign(pixels, pixels + std::size(pixels));
+    }
 }
 
 void Wrapper::SetAudioPlaying(bool playing)

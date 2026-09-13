@@ -720,6 +720,11 @@ void Wrapper::EmulationThreadLoop()
             m_core_ran_frame = true;
             m_frame_counter.fetch_add(1, std::memory_order_relaxed);
 
+            // Here, on this thread, because the core writes its VMU panels from
+            // it with no lock. Costs a stamp read per card on a frame where
+            // nothing redrew, which is most of them.
+            PublishVmuScreens();
+
             // Achievements. Emulation thread, strictly after the frame the core
             // just produced, and only ever on a frame that is final; the rollback
             // paths deliberately do not call this (see NetplayRollbackIteration).
@@ -781,6 +786,7 @@ void Wrapper::EmulationThreadLoop()
         m_core->retro_run();
         m_core_ran_frame = true;
         int64_t frame_done = m_frame_counter.fetch_add(1, std::memory_order_relaxed) + 1;
+        PublishVmuScreens();
         accumulator -= frame_duration_ms;
 
         // Lockstep netplay frames are final (every peer has confirmed the inputs

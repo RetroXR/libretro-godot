@@ -99,6 +99,15 @@ public:
     godot::Ref<godot::ImageTexture> GetVideoTexture() const;
     /// The same frame CPU-side. See VideoHandler::GetImage.
     godot::Ref<godot::Image> GetVideoImage() const;
+
+    /// Whether this core can hand its VMU screens over separately, rather than
+    /// drawing them into the picture the television shows. Only our flycast
+    /// fork can; see Core::flycast_get_vmu_screen.
+    bool HasVmuScreens() const;
+    /// One VMU's 48 x 32 LCD as a texture of its own, or null when this core
+    /// publishes none or that card has never drawn. `index` is bus * 2 + port,
+    /// so an even one is the slot-1 card. MAIN THREAD: it builds a texture.
+    godot::Ref<godot::ImageTexture> GetVmuScreenTexture(int index);
     /// Whether the core's sound is heard at all. Used to be a side effect of
     /// SetScreenMesh — a machine with nowhere to put its picture was muted — which
     /// only worked while the picture went somewhere by being PAINTED there.
@@ -801,6 +810,26 @@ public:
         std::vector<uint8_t> shadow;
     };
     std::array<SramRegion, RETRO_TRANSFER_PAK_PORTS> m_sram_regions;
+    // --- The VMU screens a Dreamcast core hands over out of band -------------
+    //
+    // Read on the emulation thread straight after each retro_run, because the
+    // core writes them from that thread with no lock of its own; turned into a
+    // texture on the main thread, where textures may be made at all. The stamp
+    // is the core's own millisecond mark, and it is what keeps this cheap: a VMU
+    // redraws a few times a second where the Dreamcast redraws sixty, so almost
+    // every frame's poll copies nothing.
+    static constexpr int VMU_SCREEN_COUNT = 8;
+    static constexpr int VMU_SCREEN_W = 48;
+    static constexpr int VMU_SCREEN_H = 32;
+    std::mutex m_vmu_screen_mutex;
+    std::vector<uint32_t> m_vmu_screen_pixels[VMU_SCREEN_COUNT];
+    uint64_t m_vmu_screen_stamp[VMU_SCREEN_COUNT] = {};
+    /// Main thread only: which stamp each texture was last built from.
+    uint64_t m_vmu_screen_seen[VMU_SCREEN_COUNT] = {};
+    godot::Ref<godot::ImageTexture> m_vmu_screen_tex[VMU_SCREEN_COUNT];
+    /// Emulation thread, after a frame. No-op on a core without the symbol.
+    void PublishVmuScreens();
+
     std::mutex m_sram_region_mutex;
     // A pak seated by hand must take effect now, not at the next 600-frame
     // flush tick, so the binding is staged here and adopted by the emulation

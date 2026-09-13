@@ -91,6 +91,16 @@ Ref<ImageTexture> Libretro::GetVideoTexture() const
     return m_wrapper ? m_wrapper->GetVideoTexture() : Ref<ImageTexture>();
 }
 
+bool Libretro::HasVmuScreens() const
+{
+    return m_wrapper ? m_wrapper->HasVmuScreens() : false;
+}
+
+Ref<ImageTexture> Libretro::GetVmuScreenTexture(int index)
+{
+    return m_wrapper ? m_wrapper->GetVmuScreenTexture(index) : Ref<ImageTexture>();
+}
+
 Ref<Image> Libretro::GetVideoImage() const
 {
     return m_wrapper ? m_wrapper->GetVideoImage() : Ref<Image>();
@@ -578,6 +588,8 @@ void Libretro::_bind_methods()
     ClassDB::bind_method(D_METHOD("LinkTraffic", "port"), &Libretro::LinkTraffic, DEFVAL(0u));
     ClassDB::bind_method(D_METHOD("LinkSent", "port"), &Libretro::LinkSent, DEFVAL(0u));
     ClassDB::bind_method(D_METHOD("GetVideoTexture"), &Libretro::GetVideoTexture);
+    ClassDB::bind_method(D_METHOD("HasVmuScreens"), &Libretro::HasVmuScreens);
+    ClassDB::bind_method(D_METHOD("GetVmuScreenTexture", "index"), &Libretro::GetVmuScreenTexture);
     ClassDB::bind_method(D_METHOD("GetVideoImage"), &Libretro::GetVideoImage);
     ClassDB::bind_method(D_METHOD("SetAudioPlaying", "playing"), &Libretro::SetAudioPlaying);
     ClassDB::bind_method(D_METHOD("SetCoreOption", "key", "value"), &Libretro::SetCoreOption);
