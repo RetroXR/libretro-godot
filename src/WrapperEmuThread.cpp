@@ -418,16 +418,29 @@ void Wrapper::EmulationThreadLoop()
 
     // Apply device selections made before the core started (controller/mouse
     // plugged in while the system was off). retro_set_controller_port_device is
-    // canonical right after retro_load_game; default joypad ports are skipped.
+    // canonical right after retro_load_game.
     {
         std::lock_guard<std::mutex> lock(m_port_device_mutex);
         for (const auto& [port, device] : m_pending_port_devices)
         {
-            // Skip core defaults: plain joypad is what cores assume, and NONE
-            // (recorded by an unplug while off) must not kill the port's
-            // fallback global-input path. Subclassed devices (multitap 257,
-            // mouse 2, lightgun…) pass through.
-            if (device == RETRO_DEVICE_JOYPAD || device == RETRO_DEVICE_NONE)
+            // NONE is skipped: it is recorded by an unplug while the machine was
+            // off, and announcing it would kill the port's fallback global-input
+            // path.
+            //
+            // JOYPAD used to be skipped too, on the reasoning that a plain
+            // joypad is what a core assumes. That holds for nearly all of them
+            // and is wrong for at least one. flycast takes its main maple device
+            // FROM this call (JOYPAD -> MDT_SegaController), so a port the
+            // frontend never announced stayed empty: a Dreamcast came up with no
+            // controller at all, and therefore no expansion socket and no VMU,
+            // because a VMU lives in the controller rather than the console.
+            // Crazy Taxi 2 says so on its own memory-card screen — "The
+            // controller has been removed", with both sockets empty under port A.
+            //
+            // Announcing it is what the API asks for and costs nothing on a core
+            // that already assumed it. This loop only carries ports the frontend
+            // explicitly set, so it is not a blanket announce over every port.
+            if (device == RETRO_DEVICE_NONE)
                 continue;
             Log("Applying pre-start port device: port=" + std::to_string(port)
                 + " device=" + std::to_string(device));
