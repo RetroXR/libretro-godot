@@ -221,6 +221,10 @@ public:
     /// Meta XR Audio voice ids this core's sound is spatialized through, or
     /// empty when it is running on the fallback AudioStreamPlayer3D.
     godot::PackedInt32Array GetAudioVoiceIds();
+    /// The Meta XR Audio voice a controller's own sound plays on -- device `index`
+    /// on `port`, index 0 being a Wii Remote's speaker -- or -1 until that device
+    /// has made a sound, and always -1 on the fallback backend.
+    int GetControllerAudioVoiceId(int port, int index);
 
     /// True once the audio sink is up and a backend has actually been chosen.
     ///

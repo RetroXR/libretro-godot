@@ -7,6 +7,7 @@
 
 #include <libretro.h>
 
+#include "ControllerAudioInterface.hpp"
 #include "LinkInterface.hpp"
 #include "TransferPakInterface.hpp"
 
@@ -119,5 +120,6 @@ private:
     bool GetClearAllThreadWaitsCb(retro_environment_t* env);
     bool GetLinkInterface(retro_link_interface* link_interface);
     bool GetTransferPakInterface(retro_transfer_pak_interface* iface, Wrapper* instance);
+    bool GetControllerAudioInterface(retro_controller_audio_interface* iface, Wrapper* instance);
 };
 }

@@ -111,6 +111,23 @@ public:
     /// at worst one buffer routed the old way.
     void SetChannelMode(int mode) { m_channel_mode.store(mode, std::memory_order_relaxed); }
 
+    static constexpr unsigned k_controller_ports = 4;
+    static constexpr unsigned k_controller_devices = 2;
+
+    /// One block of a controller's own sound, handed over through
+    /// RETRO_ENVIRONMENT_GET_CONTROLLER_AUDIO_INTERFACE on the thread that runs the
+    /// core's batch callback. It plays on a Meta XR voice of its own, created the
+    /// first time that device makes a sound, so GDScript can put it on the
+    /// controller.
+    ///
+    /// False tells the core to mix the block into its main stream instead: the
+    /// fallback backend has no voices to give, and the SDK can run out of them.
+    bool PushControllerFrames(unsigned port, unsigned index, const int16_t* data, size_t frames);
+
+    /// The voice device `index` on `port` plays on, or -1 until it has made a
+    /// sound. GDScript positions it; it does not own it.
+    int GetControllerVoiceId(unsigned port, unsigned index) const;
+
 private:
     // --- fallback: Godot's own 3D panning -----------------------------------
     godot::Ref<godot::AudioStreamGenerator> m_audio_stream_generator = nullptr;
@@ -140,6 +157,28 @@ private:
     bool   m_use_sdk = false;
     double m_mix_rate = 48000.0;
     std::atomic<int> m_channel_mode{0};   ///< see SetChannelMode
+
+    /// A controller device's own voice. The id is written on the thread that runs
+    /// the core's batch callback and read from GDScript, hence atomic; everything
+    /// else is only touched under m_sink_mutex.
+    struct ControllerVoice
+    {
+        std::atomic<int> voice{-1};
+        void* resampler = nullptr;
+        const struct retro_resampler* backend = nullptr;
+        std::vector<float> in_float;
+        std::vector<float> out_float;
+        godot::PackedVector2Array push_buf;
+    };
+    ControllerVoice m_controller_voices[k_controller_ports * k_controller_devices];
+    /// The ratio the last main batch was resampled at, rate trim included. The
+    /// controller voices drain at the same mixer rate, so they are resampled at it
+    /// too and cannot drift away from the main voice.
+    double m_last_ratio = 1.0;
+    /// Free every controller resampler, and with destroy_voices hand the voices
+    /// back as well. Under m_sink_mutex.
+    void ReleaseControllerVoices(bool destroy_voices);
+    void FlushControllerVoices();
 
     /// Cores declare their own rate (32040 Hz SNES, 44100 PSX, 48000 N64) while
     /// the SDK context runs at Godot's mix rate, so anything that does not match
@@ -183,6 +222,7 @@ private:
     /// Stages one batch of interleaved stereo into m_push_buf. Both sinks take
     /// the array whole, so it is always sized to the batch.
     void FillPushBuffer(const float* interleaved, size_t frames);
+    static void FillStereoBuffer(godot::PackedVector2Array& buf, const float* interleaved, size_t frames);
     uint32_t QueuedFrames() const;
     /// Measure the sink and return how long until it wants audio. Touches the sink,
     /// so it belongs off the pacing loop's hot path.

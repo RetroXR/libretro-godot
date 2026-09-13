@@ -120,6 +120,7 @@ size_t AudioHandler::SampleBatchCallback(const int16_t* data, size_t frames)
     if (self->m_resampler_backend && self->m_resampler)
     {
         const double ratio = self->m_resample_ratio * drc_adjust;
+        self->m_last_ratio = ratio;
 
         // Slack on the output: the sinc resampler can emit a frame or two more
         // than the ratio implies, depending on its internal phase. Sized off the
@@ -188,13 +189,18 @@ void AudioHandler::PushFrames(const float* interleaved, size_t frames)
 
 void AudioHandler::FillPushBuffer(const float* interleaved, size_t frames)
 {
+    FillStereoBuffer(m_push_buf, interleaved, frames);
+}
+
+void AudioHandler::FillStereoBuffer(PackedVector2Array& buf, const float* interleaved, size_t frames)
+{
     // Sized to the batch exactly, because both sinks consume the whole array -
     // this cannot become a grow-only buffer without slicing, which would
     // allocate the saving straight back.
-    if (static_cast<size_t>(m_push_buf.size()) != frames)
-        m_push_buf.resize(static_cast<int64_t>(frames));
+    if (static_cast<size_t>(buf.size()) != frames)
+        buf.resize(static_cast<int64_t>(frames));
 
-    Vector2* dst = m_push_buf.ptrw();
+    Vector2* dst = buf.ptrw();
 
     // A Vector2 is two reals laid out exactly like one interleaved stereo frame,
     // so in the ordinary single-precision build this is a copy, not a
@@ -338,6 +344,9 @@ void AudioHandler::Init(float buffer_capacity_sec, double sample_rate)
     m_accept_audio.store(false, std::memory_order_release);
     m_sink_ready.store(false, std::memory_order_release);
     std::lock_guard<std::recursive_mutex> sink_lock(m_sink_mutex);
+    // Before m_use_sdk and m_mx_id are reset, which is what lets a previous run's
+    // controller voices still be found and handed back.
+    ReleaseControllerVoices(true);
 
     m_audio_buffer_capacity_sec = buffer_capacity_sec;
     m_audio_sample_rate = sample_rate;
@@ -392,6 +401,7 @@ void AudioHandler::Init(float buffer_capacity_sec, double sample_rate)
         if (m_audio_sample_rate > 0.0 && m_mix_rate > 0.0)
         {
             m_resample_ratio = m_mix_rate / m_audio_sample_rate;
+            m_last_ratio = m_resample_ratio;
             if (!retro_resampler_realloc(&m_resampler, &m_resampler_backend, "sinc",
                                          RESAMPLER_QUALITY_NORMAL, m_resample_ratio))
             {
@@ -484,6 +494,7 @@ bool AudioHandler::ReinitSampleRate(double sample_rate)
             mx->call("flush_voice", m_voice_l);
             if (m_voice_r >= 0)
                 mx->call("flush_voice", m_voice_r);
+            FlushControllerVoices();
         }
         else if (AudioStreamPlayer3D* player = LivePlayer())
         {
@@ -524,6 +535,9 @@ bool AudioHandler::ReinitSampleRate(double sample_rate)
         m_resampler = replacement_resampler;
         m_resampler_backend = replacement_backend;
         m_resample_ratio = replacement_ratio;
+        m_last_ratio = replacement_ratio;
+        // Reallocated at the new ratio by the next block each device sends.
+        ReleaseControllerVoices(false);
     }
     else
     {
@@ -613,6 +627,7 @@ void AudioHandler::SilenceForTeardown()
         if (m_voice_r >= 0)
             mx->call("flush_voice", m_voice_r);
     }
+    FlushControllerVoices();
 }
 
 void AudioHandler::DeInit()
@@ -622,6 +637,7 @@ void AudioHandler::DeInit()
     m_playing.store(false, std::memory_order_release);
     std::lock_guard<std::recursive_mutex> sink_lock(m_sink_mutex);
 
+    ReleaseControllerVoices(true);
     if (Object* mx = m_use_sdk ? LiveMx() : nullptr)
     {
         if (m_voice_l >= 0)
@@ -680,6 +696,8 @@ void AudioHandler::SetPlaying(bool playing)
             if (m_voice_r >= 0)
                 mx->call("flush_voice", m_voice_r);
         }
+        if (!playing)
+            FlushControllerVoices();
         if (playing && m_audio_sample_rate > 0.0 &&
             m_sink_ready.load(std::memory_order_relaxed) &&
             mx && m_voice_l >= 0)
@@ -717,6 +735,135 @@ PackedInt32Array AudioHandler::GetVoiceIds() const
             ids.push_back(m_voice_r);
     }
     return ids;
+}
+
+bool AudioHandler::PushControllerFrames(unsigned port, unsigned index, const int16_t* data, size_t frames)
+{
+    if (port >= k_controller_ports || index >= k_controller_devices)
+        return false;
+    if (!data || frames == 0)
+        return true;
+
+    std::lock_guard<std::recursive_mutex> lock(m_sink_mutex);
+    // No sink yet means the main batch is dropped as well, so the core mixing this
+    // in instead would change nothing.
+    if (!m_sink_ready.load(std::memory_order_relaxed))
+        return true;
+    Object* mx = m_use_sdk ? LiveMx() : nullptr;
+    if (mx == nullptr)
+        return false;
+    if (!m_accept_audio.load(std::memory_order_relaxed))
+        return true;
+
+    ControllerVoice& cv = m_controller_voices[port * k_controller_devices + index];
+    int voice = cv.voice.load(std::memory_order_relaxed);
+    if (voice < 0)
+    {
+        // A device that never makes a sound never costs a voice.
+        bool silent = true;
+        for (size_t i = 0; i < frames * 2 && silent; ++i)
+            silent = data[i] == 0;
+        if (silent)
+            return true;
+
+        // Safe off the main thread: the main voices already brought the mixer up,
+        // so this is only an atomic claim on a free slot.
+        voice = static_cast<int>(mx->call("create_voice"));
+        if (voice < 0)
+            return false;
+        cv.voice.store(voice, std::memory_order_release);
+        Log("AudioHandler: controller " + std::to_string(port) + "." + std::to_string(index)
+            + " plays on voice " + std::to_string(voice));
+    }
+
+    const bool rates_differ = static_cast<int>(m_audio_sample_rate) != static_cast<int>(m_mix_rate);
+    if (!cv.resampler && m_audio_sample_rate > 0.0 && m_mix_rate > 0.0 &&
+        !retro_resampler_realloc(&cv.resampler, &cv.backend, "sinc", RESAMPLER_QUALITY_NORMAL, m_resample_ratio))
+    {
+        cv.resampler = nullptr;
+        cv.backend = nullptr;
+    }
+    if (!cv.resampler && rates_differ)
+        return false;
+
+    cv.in_float.resize(frames * 2);
+    for (size_t i = 0; i < frames * 2; ++i)
+        cv.in_float[i] = data[i] / 32768.0f;
+
+    const float* out = cv.in_float.data();
+    size_t out_frames = frames;
+    if (cv.resampler)
+    {
+        const size_t cap = static_cast<size_t>(frames * m_last_ratio) + 32;
+        cv.out_float.resize(cap * 2);
+        struct resampler_data rd = {};
+        rd.data_in      = cv.in_float.data();
+        rd.data_out     = cv.out_float.data();
+        rd.input_frames = frames;
+        rd.ratio        = m_last_ratio;
+        cv.backend->process(cv.resampler, &rd);
+        out = cv.out_float.data();
+        out_frames = rd.output_frames;
+    }
+    if (out_frames == 0)
+        return true;
+
+    // The mixer plays a voice with no prebuffer and counts an underrun on every
+    // block it finds one empty. An empty controller voice is therefore first
+    // filled with silence to the main voice's depth, which also lands its sound
+    // at the same moment as the game's.
+    if (static_cast<int>(mx->call("voice_frames_available", voice)) == 0)
+    {
+        const uint32_t depth = QueuedFrames();
+        if (depth > 0)
+        {
+            cv.push_buf.resize(static_cast<int64_t>(depth));
+            cv.push_buf.fill(Vector2());
+            mx->call("push_stereo_frames", voice, -1, cv.push_buf, 0);
+        }
+    }
+
+    // A right voice of -1 downmixes to the one voice.
+    FillStereoBuffer(cv.push_buf, out, out_frames);
+    mx->call("push_stereo_frames", voice, -1, cv.push_buf, 0);
+    return true;
+}
+
+int AudioHandler::GetControllerVoiceId(unsigned port, unsigned index) const
+{
+    if (port >= k_controller_ports || index >= k_controller_devices)
+        return -1;
+    return m_controller_voices[port * k_controller_devices + index].voice.load(std::memory_order_acquire);
+}
+
+void AudioHandler::ReleaseControllerVoices(bool destroy_voices)
+{
+    Object* mx = m_use_sdk ? LiveMx() : nullptr;
+    for (ControllerVoice& cv : m_controller_voices)
+    {
+        if (cv.resampler && cv.backend)
+            cv.backend->free(cv.resampler);
+        cv.resampler = nullptr;
+        cv.backend = nullptr;
+        if (!destroy_voices)
+            continue;
+        const int voice = cv.voice.exchange(-1, std::memory_order_acq_rel);
+        if (mx && voice >= 0)
+            mx->call("destroy_voice", voice);
+    }
+}
+
+void AudioHandler::FlushControllerVoices()
+{
+    Object* mx = m_use_sdk ? LiveMx() : nullptr;
+    if (!mx)
+        return;
+    for (const ControllerVoice& cv : m_controller_voices)
+    {
+        const int voice = cv.voice.load(std::memory_order_acquire);
+        if (voice >= 0)
+            mx->call("flush_voice", voice);
+    }
 }
 
 bool AudioHandler::SetAudioBufferStatusCallback(const retro_audio_buffer_status_callback* callback)
