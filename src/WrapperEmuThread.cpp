@@ -74,6 +74,8 @@ void Wrapper::FinishTeardown()
     m_audio_handler->DeInit();
     SetCurrentThreadWrapper(nullptr);
 
+    m_microphone_handler->ReleaseAll();
+
     ClearCoreIdentity();
 
     m_core->Unload();

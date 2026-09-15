@@ -28,10 +28,11 @@ public:
     retro_input_poll_t         GetInputPollCallback() const;
     retro_input_state_t        GetInputStateCallback() const;
     retro_log_printf_t         GetLogCallback() const;
+    retro_open_mic_t           GetOpenMicCallback() const;
+
+    static constexpr int TRAMPOLINE_COUNT = 8;
 
 private:
-    static constexpr int TRAMPOLINE_COUNT = 7;
-
     enum TrampolineIndex
     {
         IDX_ENVIRONMENT = 0,
@@ -41,6 +42,7 @@ private:
         IDX_INPUT_POLL,
         IDX_INPUT_STATE,
         IDX_LOG,
+        IDX_OPEN_MIC,
     };
 
     void* m_code_page = nullptr;

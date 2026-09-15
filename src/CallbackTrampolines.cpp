@@ -6,6 +6,7 @@
 #include "AudioHandler.hpp"
 #include "InputHandler.hpp"
 #include "LogHandler.hpp"
+#include "MicrophoneHandler.hpp"
 #include "Debug.hpp"
 
 #ifdef _WIN32
@@ -21,7 +22,7 @@
 namespace Xenu
 {
 
-// Handler addresses for all 7 trampolined callbacks.
+// Handler addresses for every trampolined callback, in TrampolineIndex order.
 // These casts are safe for static member functions on all supported compilers.
 static void* const k_handlers[] = {
     reinterpret_cast<void*>(&EnvironmentHandler::Callback),
@@ -31,8 +32,10 @@ static void* const k_handlers[] = {
     reinterpret_cast<void*>(&InputHandler::PollCallback),
     reinterpret_cast<void*>(&InputHandler::StateCallback),
     reinterpret_cast<void*>(&LogHandler::LogInterfaceLog),
+    reinterpret_cast<void*>(&MicrophoneHandler::OpenMic),
 };
-static_assert(sizeof(k_handlers) / sizeof(k_handlers[0]) == 7, "Must match TRAMPOLINE_COUNT");
+static_assert(sizeof(k_handlers) / sizeof(k_handlers[0]) == CallbackTrampolines::TRAMPOLINE_COUNT,
+              "Must match TRAMPOLINE_COUNT");
 
 CallbackTrampolines::CallbackTrampolines(Wrapper* wrapper)
 {
@@ -59,7 +62,7 @@ CallbackTrampolines::~CallbackTrampolines()
 
 void CallbackTrampolines::GenerateTrampolines(Wrapper* wrapper)
 {
-    // One 4KB page is plenty for 7 × ~64-byte stubs
+    // One 4KB page holds every ~64-byte stub with room to spare
     m_code_size = 4096;
     m_code_page = VirtualAlloc(nullptr, m_code_size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
     if (!m_code_page)
@@ -427,6 +430,11 @@ retro_input_state_t CallbackTrampolines::GetInputStateCallback() const
 retro_log_printf_t CallbackTrampolines::GetLogCallback() const
 {
     return reinterpret_cast<retro_log_printf_t>(m_entry_points[IDX_LOG]);
+}
+
+retro_open_mic_t CallbackTrampolines::GetOpenMicCallback() const
+{
+    return reinterpret_cast<retro_open_mic_t>(m_entry_points[IDX_OPEN_MIC]);
 }
 
 } // namespace Xenu

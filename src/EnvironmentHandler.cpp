@@ -355,7 +355,7 @@ bool EnvironmentHandler::Callback(uint32_t cmd, void* data)
         return true;
     }
     case RETRO_ENVIRONMENT_GET_JIT_CAPABLE:                                     return EnvironmentNotImplemented(cmd);
-    case RETRO_ENVIRONMENT_GET_MICROPHONE_INTERFACE:                            return EnvironmentNotImplemented(cmd);
+    case RETRO_ENVIRONMENT_GET_MICROPHONE_INTERFACE:                            return instance->m_microphone_handler->GetMicrophoneInterface(static_cast<retro_microphone_interface*>(data));
     case RETRO_ENVIRONMENT_GET_DEVICE_POWER:                                    return EnvironmentNotImplemented(cmd);
     case RETRO_ENVIRONMENT_SET_NETPACKET_INTERFACE:                             return EnvironmentNotImplemented(cmd);
     // Both spellings: cores probe the experimental number today, and will

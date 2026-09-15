@@ -40,6 +40,7 @@ void Wrapper::SetNetplayMode(bool enabled, uint32_t port_mask, int64_t start_fra
     if (start_frame >= 0)
         m_frame_counter.store(start_frame, std::memory_order_relaxed);
     m_netplay_enabled.store(enabled, std::memory_order_release);
+    m_microphone_handler->ResetAll();
     m_np_cv.notify_all();
     Log("Netplay mode " + std::string(enabled ? "ON" : "OFF") +
         " mask=" + std::to_string(port_mask) + " start_frame=" + std::to_string(start_frame));
@@ -92,6 +93,7 @@ void Wrapper::SetNetplayRollback(bool enabled, uint32_t local_mask, int max_ahea
     m_np_local_mask.store(local_mask, std::memory_order_relaxed);
     m_np_max_ahead = std::clamp(max_ahead, 2, NP_MAX_AHEAD_LIMIT);
     m_np_rollback.store(enabled, std::memory_order_release);
+    m_microphone_handler->ResetAll();
     m_np_cv.notify_all();
     Log("Netplay rollback " + std::string(enabled ? "ON" : "OFF") +
         " local_mask=" + std::to_string(local_mask) +

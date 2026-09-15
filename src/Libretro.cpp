@@ -233,6 +233,16 @@ void Libretro::SetSensorGyro(int port, float x, float y, float z, int index)
                              static_cast<uint32_t>(index));
 }
 
+void Libretro::PushMicrophoneFrames(const godot::PackedVector2Array& frames, double source_rate, double gain)
+{
+    m_wrapper->PushMicrophoneFrames(frames, source_rate, static_cast<float>(gain));
+}
+
+bool Libretro::IsMicrophoneActive() const
+{
+    return m_wrapper && m_wrapper->IsMicrophoneActive();
+}
+
 void Libretro::SetPointerState(int port, int x, int y, bool pressed)
 {
     m_wrapper->SetPointerState(static_cast<uint32_t>(port),
@@ -615,6 +625,8 @@ void Libretro::_bind_methods()
     ClassDB::bind_method(D_METHOD("SetSensorGyro", "port", "x", "y", "z", "index"), &Libretro::SetSensorGyro, DEFVAL(0));
     ClassDB::bind_method(D_METHOD("SetPointerState", "port", "x", "y", "pressed"), &Libretro::SetPointerState);
     ClassDB::bind_method(D_METHOD("SetPointerIndexState", "port", "index", "x", "y", "pressed"), &Libretro::SetPointerIndexState);
+    ClassDB::bind_method(D_METHOD("PushMicrophoneFrames", "frames", "source_rate", "gain"), &Libretro::PushMicrophoneFrames, DEFVAL(1.0));
+    ClassDB::bind_method(D_METHOD("IsMicrophoneActive"), &Libretro::IsMicrophoneActive);
     ClassDB::bind_method(D_METHOD("SetNetplayMode", "enabled", "port_mask", "start_frame"), &Libretro::SetNetplayMode);
     ClassDB::bind_method(D_METHOD("PostNetplayInputs", "frame", "inputs"), &Libretro::PostNetplayInputs);
     ClassDB::bind_method(D_METHOD("SetNetplayRollback", "enabled", "local_mask", "max_ahead"), &Libretro::SetNetplayRollback);

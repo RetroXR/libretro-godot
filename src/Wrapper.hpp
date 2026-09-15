@@ -39,6 +39,7 @@
 #include "OptionsHandler.hpp"
 #include "MessageHandler.hpp"
 #include "LogHandler.hpp"
+#include "MicrophoneHandler.hpp"
 
 namespace Xenu
 {
@@ -168,6 +169,10 @@ public:
     /// Gyroscope feed (radians/second about the device's own axes) for the same
     /// interface. Rotation rate, not orientation: a still device reads (0,0,0).
     void SetSensorGyro(uint32_t port, float x, float y, float z, uint32_t index = 0);
+
+    /// Host microphone frames for every microphone this core has switched on.
+    void PushMicrophoneFrames(const godot::PackedVector2Array& frames, double source_rate, float gain);
+    bool IsMicrophoneActive() const;
 
     /// Touch/pointer feed (RETRO_DEVICE_POINTER): x/y normalized to
     /// [-0x7FFF, 0x7FFF] across the WHOLE video output (the composite
@@ -610,6 +615,9 @@ public:
     std::unique_ptr<OptionsHandler> m_options_handler = nullptr;
     std::unique_ptr<MessageHandler> m_message_handler = nullptr;
     std::unique_ptr<LogHandler> m_log_handler = nullptr;
+    // Lives as long as the Wrapper: a microphone handle can outlive a core run on
+    // the core's own threads, and resolves through this.
+    std::unique_ptr<MicrophoneHandler> m_microphone_handler = std::make_unique<MicrophoneHandler>(*this);
 
     std::thread m_thread;
     moodycamel::ReaderWriterQueue<std::unique_ptr<ThreadCommand>> m_main_thread_commands_queue;

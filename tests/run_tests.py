@@ -29,6 +29,8 @@ TESTS = {
     # Header-only: the encoding is the whole unit, and InputHandler.cpp is not
     # Godot-free the way LinkCoordinator.cpp deliberately is.
     "sensor_index_test.cpp": [],
+    # Header-only: MicrophoneHandler.cpp needs Wrapper and Godot.
+    "microphone_stream_test.cpp": [],
     # A benchmark rather than a test: it prints a cost curve and only fails if
     # the bus cannot be set up. Run it on its own (--only link_bench), because
     # it is slow by design and its numbers want reading, not gating.

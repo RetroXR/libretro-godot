@@ -2,6 +2,7 @@
 
 #include <godot_cpp/classes/node3d.hpp>
 #include <godot_cpp/variant/packed_int32_array.hpp>
+#include <godot_cpp/variant/packed_vector2_array.hpp>
 #include <godot_cpp/classes/image_texture.hpp>
 #include <godot_cpp/classes/input_event.hpp>
 #include <godot_cpp/classes/input_event_key.hpp>
@@ -298,6 +299,14 @@ public:
     /// Unlike SetPointerState this leaves the other indices alone, so send every
     /// index you own each frame, visible or not.
     void SetPointerIndexState(int port, int index, int x, int y, bool pressed);
+
+    /// Captured host-microphone frames (stereo, [-1, 1]) at `source_rate`, fed to
+    /// every microphone this core has switched on and resampled to each one's
+    /// rate. `gain` scales them first.
+    void PushMicrophoneFrames(const godot::PackedVector2Array& frames, double source_rate, double gain = 1.0);
+    /// True while the core has a microphone open and switched on, and the machine
+    /// is running and not in netplay.
+    bool IsMicrophoneActive() const;
 
     // ── Netplay (deterministic lockstep) ─────────────────────────────────────
     /// Gate the emulation loop: frame N runs only once PostNetplayInputs(N,…)

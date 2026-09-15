@@ -481,6 +481,16 @@ void Wrapper::SetSensorGyro(uint32_t port, float x, float y, float z, uint32_t i
         m_input_handler->SetSensorGyro(port, x, y, z, index);
 }
 
+void Wrapper::PushMicrophoneFrames(const godot::PackedVector2Array& frames, double source_rate, float gain)
+{
+    m_microphone_handler->Push(frames, source_rate, gain);
+}
+
+bool Wrapper::IsMicrophoneActive() const
+{
+    return m_microphone_handler->IsActive();
+}
+
 void Wrapper::SetPointerState(uint32_t port, int16_t x, int16_t y, bool pressed)
 {
     if (m_input_handler && !IsNetplayPortManaged(port))
