@@ -481,6 +481,12 @@ void Wrapper::SetSensorGyro(uint32_t port, float x, float y, float z, uint32_t i
         m_input_handler->SetSensorGyro(port, x, y, z, index);
 }
 
+void Wrapper::SetJoypadExtraButtons(uint32_t port, uint16_t buttons)
+{
+    if (m_input_handler && !IsNetplayPortManaged(port))
+        m_input_handler->SetJoypadExtraButtons(port, buttons);
+}
+
 void Wrapper::PushMicrophoneFrames(const godot::PackedVector2Array& frames, double source_rate, float gain)
 {
     m_microphone_handler->Push(frames, source_rate, gain);

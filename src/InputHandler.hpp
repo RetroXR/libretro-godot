@@ -92,6 +92,10 @@ public:
 
     void SetJoypadButtonStates(uint32_t port, uint16_t states);
     uint16_t GetJoypadButtonStates(uint32_t port);
+    /// Bits ORed into every joypad read of `port`, for a button that belongs to a
+    /// peripheral rather than to the controller writing the port's mask.
+    void SetJoypadExtraButtons(uint32_t port, uint16_t buttons);
+    void ClearJoypadExtraButtons();
 
     void SetMousePosition(uint32_t port, int16_t x, int16_t y);
     uint16_t GetMouseX(uint32_t port);
@@ -179,6 +183,8 @@ private:
     mutable std::recursive_mutex m_state_mutex;
 
     std::unordered_map<uint32_t, uint16_t> m_joypad_buttons;
+    // Not in NetplayState: cleared when netplay starts, refused on its ports.
+    std::unordered_map<uint32_t, uint16_t> m_joypad_extra;
 
     std::unordered_map<uint32_t, int16_t> m_mouse_x;
     std::unordered_map<uint32_t, int16_t> m_mouse_y;

@@ -170,6 +170,9 @@ public:
     /// interface. Rotation rate, not orientation: a still device reads (0,0,0).
     void SetSensorGyro(uint32_t port, float x, float y, float z, uint32_t index = 0);
 
+    /// Bits ORed into `port`'s joypad reads, for a button on a peripheral.
+    void SetJoypadExtraButtons(uint32_t port, uint16_t buttons);
+
     /// Host microphone frames for every microphone this core has switched on.
     void PushMicrophoneFrames(const godot::PackedVector2Array& frames, double source_rate, float gain);
     bool IsMicrophoneActive() const;

@@ -189,6 +189,18 @@ uint16_t InputHandler::GetJoypadButtonStates(uint32_t port)
     return m_joypad_buttons[port];
 }
 
+void InputHandler::SetJoypadExtraButtons(uint32_t port, uint16_t buttons)
+{
+    std::lock_guard<std::recursive_mutex> lock(m_state_mutex);
+    m_joypad_extra[port] = buttons;
+}
+
+void InputHandler::ClearJoypadExtraButtons()
+{
+    std::lock_guard<std::recursive_mutex> lock(m_state_mutex);
+    m_joypad_extra.clear();
+}
+
 void InputHandler::SetMousePosition(uint32_t port, int16_t x, int16_t y)
 {
     std::lock_guard<std::recursive_mutex> lock(m_state_mutex);
@@ -628,9 +640,13 @@ bool InputHandler::SetKeyboardEventCallback(const retro_keyboard_callback* keybo
 int16_t InputHandler::ProcessJoypadDevice(uint32_t port, uint32_t id)
 {
     std::lock_guard<std::recursive_mutex> lock(m_state_mutex);
+    uint16_t buttons = m_joypad_buttons[port];
+    const auto extra = m_joypad_extra.find(port);
+    if (extra != m_joypad_extra.end())
+        buttons |= extra->second;
     if (id == RETRO_DEVICE_ID_JOYPAD_MASK)
-        return m_joypad_buttons[port];
-    return m_joypad_buttons[port] & (1 << id);
+        return static_cast<int16_t>(buttons);
+    return buttons & (1 << id);
 }
 
 int16_t InputHandler::ProcessMouseDevice(uint32_t port, uint32_t id)

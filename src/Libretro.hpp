@@ -300,6 +300,10 @@ public:
     /// index you own each frame, visible or not.
     void SetPointerIndexState(int port, int index, int x, int y, bool pressed);
 
+    /// Button bits ORed into `port`'s joypad reads on top of whatever its
+    /// controller writes, for a button that belongs to a peripheral. 0 releases.
+    void SetJoypadExtraButtons(int port, int buttons);
+
     /// Captured host-microphone frames (stereo, [-1, 1]) at `source_rate`, fed to
     /// every microphone this core has switched on and resampled to each one's
     /// rate. `gain` scales them first.
