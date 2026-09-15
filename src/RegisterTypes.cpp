@@ -8,6 +8,15 @@
 #include <godot_cpp/core/memory.hpp>
 #include <godot_cpp/godot.hpp>
 
+#if defined(__ANDROID__) && defined(__aarch64__)
+#include <android/api-level.h>
+#include <malloc.h>
+#if __ANDROID_API__ < 26
+// <malloc.h> declares it only from API 26.
+extern "C" int mallopt(int, int) __attribute__((weak));
+#endif
+#endif
+
 using namespace godot;
 
 namespace
@@ -19,6 +28,13 @@ void initialize(ModuleInitializationLevel p_level)
 {
     if (p_level != ModuleInitializationLevel::MODULE_INITIALIZATION_LEVEL_SCENE)
         return;
+
+#if defined(__ANDROID__) && defined(__aarch64__)
+    // Cores match signal fault addresses, which arrive without the heap tag,
+    // against memory they malloc'd.
+    if (mallopt != nullptr && android_get_device_api_level() >= 31)
+        mallopt(M_BIONIC_SET_HEAP_TAGGING_LEVEL, M_HEAP_TAGGING_LEVEL_NONE);
+#endif
 
     ClassDB::register_class<Xenu::LibretroOptionCategory>();
     ClassDB::register_class<Xenu::LibretroOptionValue>();
