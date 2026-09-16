@@ -311,6 +311,13 @@ public:
     /// True while the core has a microphone open and switched on, and the machine
     /// is running and not in netplay.
     bool IsMicrophoneActive() const;
+    /// (rms, peak) of the same frames, high-passed and mono-mixed, scaled by
+    /// `gain`. Static on purpose: a machine wanting a level need not have a
+    /// microphone open in its core -- a Famicom's Controller II is a bit on a
+    /// pad, not a capture device -- and the one reader measures once for all of
+    /// them.
+    static godot::Vector2 MeasureMicrophoneLevel(const godot::PackedVector2Array& frames,
+                                                 double source_rate, double gain = 1.0);
 
     // ── Netplay (deterministic lockstep) ─────────────────────────────────────
     /// Gate the emulation loop: frame N runs only once PostNetplayInputs(N,…)

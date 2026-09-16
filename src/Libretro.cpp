@@ -5,6 +5,7 @@
 #include "AudioHandler.hpp"
 #include "CoreOptionsPeek.hpp"
 #include "RetroAchievements.hpp"
+#include "MicrophoneLevel.hpp"
 
 #include <filesystem>
 #include <utility>
@@ -246,6 +247,18 @@ void Libretro::PushMicrophoneFrames(const godot::PackedVector2Array& frames, dou
 bool Libretro::IsMicrophoneActive() const
 {
     return m_wrapper && m_wrapper->IsMicrophoneActive();
+}
+
+Vector2 Libretro::MeasureMicrophoneLevel(const godot::PackedVector2Array& frames,
+                                         double source_rate, double gain)
+{
+    static_assert(sizeof(Vector2) == 2 * sizeof(float), "Vector2 must be a pair of floats");
+    if (frames.is_empty())
+        return Vector2();
+    const MicrophoneLevel level = MicrophoneLevelMeter::Measure(
+        reinterpret_cast<const float*>(frames.ptr()), static_cast<size_t>(frames.size()),
+        source_rate, static_cast<float>(gain));
+    return Vector2(level.rms, level.peak);
 }
 
 void Libretro::SetPointerState(int port, int x, int y, bool pressed)
@@ -633,6 +646,8 @@ void Libretro::_bind_methods()
     ClassDB::bind_method(D_METHOD("SetJoypadExtraButtons", "port", "buttons"), &Libretro::SetJoypadExtraButtons);
     ClassDB::bind_method(D_METHOD("PushMicrophoneFrames", "frames", "source_rate", "gain"), &Libretro::PushMicrophoneFrames, DEFVAL(1.0));
     ClassDB::bind_method(D_METHOD("IsMicrophoneActive"), &Libretro::IsMicrophoneActive);
+    ClassDB::bind_static_method("Libretro", D_METHOD("MeasureMicrophoneLevel", "frames", "source_rate", "gain"),
+        &Libretro::MeasureMicrophoneLevel, DEFVAL(1.0));
     ClassDB::bind_method(D_METHOD("SetNetplayMode", "enabled", "port_mask", "start_frame"), &Libretro::SetNetplayMode);
     ClassDB::bind_method(D_METHOD("PostNetplayInputs", "frame", "inputs"), &Libretro::PostNetplayInputs);
     ClassDB::bind_method(D_METHOD("SetNetplayRollback", "enabled", "local_mask", "max_ahead"), &Libretro::SetNetplayRollback);

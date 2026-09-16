@@ -31,6 +31,9 @@ TESTS = {
     "sensor_index_test.cpp": [],
     # Header-only: MicrophoneHandler.cpp needs Wrapper and Godot.
     "microphone_stream_test.cpp": [],
+    # Header-only, and deliberately so: the level is measured for machines whose
+    # core has no microphone open at all.
+    "microphone_level_test.cpp": [],
     # A benchmark rather than a test: it prints a cost curve and only fails if
     # the bus cannot be set up. Run it on its own (--only link_bench), because
     # it is slow by design and its numbers want reading, not gating.
