@@ -34,17 +34,17 @@ static void TestIndexZeroIsIdentity()
 {
     std::printf("T1 sub-device 0 encodes to the values already in use\n");
 
-    Check(RETRO_SENSOR_ID(0, RETRO_SENSOR_ACCELEROMETER_X) == 0u, "accelerometer X stays 0");
-    Check(RETRO_SENSOR_ID(0, RETRO_SENSOR_ACCELEROMETER_Y) == 1u, "accelerometer Y stays 1");
-    Check(RETRO_SENSOR_ID(0, RETRO_SENSOR_ACCELEROMETER_Z) == 2u, "accelerometer Z stays 2");
-    Check(RETRO_SENSOR_ID(0, RETRO_SENSOR_GYROSCOPE_X) == 3u, "gyroscope X stays 3");
-    Check(RETRO_SENSOR_ID(0, RETRO_SENSOR_GYROSCOPE_Y) == 4u, "gyroscope Y stays 4");
-    Check(RETRO_SENSOR_ID(0, RETRO_SENSOR_GYROSCOPE_Z) == 5u, "gyroscope Z stays 5");
-    Check(RETRO_SENSOR_ID(0, RETRO_SENSOR_ILLUMINANCE) == 6u, "illuminance stays 6");
+    Check(RETRO_SENSOR_SUBDEVICE(0, RETRO_SENSOR_ACCELEROMETER_X) == 0u, "accelerometer X stays 0");
+    Check(RETRO_SENSOR_SUBDEVICE(0, RETRO_SENSOR_ACCELEROMETER_Y) == 1u, "accelerometer Y stays 1");
+    Check(RETRO_SENSOR_SUBDEVICE(0, RETRO_SENSOR_ACCELEROMETER_Z) == 2u, "accelerometer Z stays 2");
+    Check(RETRO_SENSOR_SUBDEVICE(0, RETRO_SENSOR_GYROSCOPE_X) == 3u, "gyroscope X stays 3");
+    Check(RETRO_SENSOR_SUBDEVICE(0, RETRO_SENSOR_GYROSCOPE_Y) == 4u, "gyroscope Y stays 4");
+    Check(RETRO_SENSOR_SUBDEVICE(0, RETRO_SENSOR_GYROSCOPE_Z) == 5u, "gyroscope Z stays 5");
+    Check(RETRO_SENSOR_SUBDEVICE(0, RETRO_SENSOR_ILLUMINANCE) == 6u, "illuminance stays 6");
 
     // The action enum too, since the enable call carries the index there.
-    Check(RETRO_SENSOR_ID(0, RETRO_SENSOR_ACCELEROMETER_ENABLE) == 0u, "accel enable stays 0");
-    Check(RETRO_SENSOR_ID(0, RETRO_SENSOR_ILLUMINANCE_DISABLE) == 5u, "illuminance disable stays 5");
+    Check(RETRO_SENSOR_SUBDEVICE(0, RETRO_SENSOR_ACCELEROMETER_ENABLE) == 0u, "accel enable stays 0");
+    Check(RETRO_SENSOR_SUBDEVICE(0, RETRO_SENSOR_ILLUMINANCE_DISABLE) == 5u, "illuminance disable stays 5");
 }
 
 // ── T2: a plain value from a core that has never heard of this ──────────────
@@ -70,14 +70,14 @@ static void TestSubDeviceRoundTrips()
 {
     std::printf("T3 sub-device 1 encodes and decodes back\n");
 
-    Check(RETRO_SENSOR_ID(1, RETRO_SENSOR_ACCELEROMETER_X) == 256u, "accelerometer X lands on 256");
-    Check(RETRO_SENSOR_ID(1, RETRO_SENSOR_ILLUMINANCE) == 262u, "illuminance lands on 262");
+    Check(RETRO_SENSOR_SUBDEVICE(1, RETRO_SENSOR_ACCELEROMETER_X) == 256u, "accelerometer X lands on 256");
+    Check(RETRO_SENSOR_SUBDEVICE(1, RETRO_SENSOR_ILLUMINANCE) == 262u, "illuminance lands on 262");
 
     for (unsigned id = RETRO_SENSOR_ACCELEROMETER_X; id <= RETRO_SENSOR_ILLUMINANCE; ++id)
     {
         unsigned index = 99;
         unsigned base = 99;
-        const bool ok = RetroSensorSplit(RETRO_SENSOR_ID(1, id), CARRIED, index, base);
+        const bool ok = RetroSensorSplit(RETRO_SENSOR_SUBDEVICE(1, id), CARRIED, index, base);
         if (!(ok && index == 1u && base == id))
         {
             Check(false, "every id round-trips through sub-device 1");
@@ -97,9 +97,9 @@ static void TestUncarriedIndexIsRefused()
     // A false return is the answer a core is meant to get: it means "no such
     // sensor here", which is exactly what an unaware frontend would say by
     // never having implemented any of this.
-    Check(!RetroSensorSplit(RETRO_SENSOR_ID(2, RETRO_SENSOR_ACCELEROMETER_X), CARRIED, index, base),
+    Check(!RetroSensorSplit(RETRO_SENSOR_SUBDEVICE(2, RETRO_SENSOR_ACCELEROMETER_X), CARRIED, index, base),
           "sub-device 2 is refused when only 2 are carried");
-    Check(!RetroSensorSplit(RETRO_SENSOR_ID(7, RETRO_SENSOR_ACCELEROMETER_X), CARRIED, index, base),
+    Check(!RetroSensorSplit(RETRO_SENSOR_SUBDEVICE(7, RETRO_SENSOR_ACCELEROMETER_X), CARRIED, index, base),
           "and so is a far-fetched one");
 
     // Decoded anyway, so a caller that logs the refusal can say what was asked
@@ -109,7 +109,7 @@ static void TestUncarriedIndexIsRefused()
 
     // The limit is what decides, not the number 1: a frontend carrying only the
     // controller itself refuses the very index this one accepts.
-    Check(!RetroSensorSplit(RETRO_SENSOR_ID(1, RETRO_SENSOR_ACCELEROMETER_X), 1u, index, base),
+    Check(!RetroSensorSplit(RETRO_SENSOR_SUBDEVICE(1, RETRO_SENSOR_ACCELEROMETER_X), 1u, index, base),
           "carrying only the controller refuses sub-device 1");
 }
 
@@ -125,7 +125,7 @@ static void TestNoCollision()
           "the largest id fits under the shift");
     Check(RETRO_SENSOR_ILLUMINANCE_DISABLE < (1 << RETRO_SENSOR_INDEX_SHIFT),
           "the largest action fits under the shift");
-    Check(RETRO_SENSOR_ID(1, RETRO_SENSOR_ACCELEROMETER_X) > RETRO_SENSOR_ILLUMINANCE,
+    Check(RETRO_SENSOR_SUBDEVICE(1, RETRO_SENSOR_ACCELEROMETER_X) > RETRO_SENSOR_ILLUMINANCE,
           "so sub-device 1 starts past every plain value");
 }
 
