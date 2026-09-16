@@ -34,6 +34,9 @@ TESTS = {
     # Header-only, and deliberately so: the level is measured for machines whose
     # core has no microphone open at all.
     "microphone_level_test.cpp": [],
+    # Header-only: the conversions are the whole unit, and VideoHandler.cpp
+    # reaches Godot.
+    "pixel_swizzle_test.cpp": [],
     # A benchmark rather than a test: it prints a cost curve and only fails if
     # the bus cannot be set up. Run it on its own (--only link_bench), because
     # it is slow by design and its numbers want reading, not gating.

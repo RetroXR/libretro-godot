@@ -147,10 +147,10 @@ void VideoHandler::RefreshCallback(const void* data, uint32_t width, uint32_t he
     {
         pixel_data.resize(width * height * 4);
 
-        const uint8_t* src = static_cast<const uint8_t*>(data);
         uint8_t* dst = pixel_data.ptrw();
 
-        conv_argb8888_abgr8888(dst, src, width, height, width * 4, pitch);
+        Xrgb8888ToRgba8(dst, data, width, height,
+                        static_cast<size_t>(width) * 4, pitch);
 
         instance->m_video_handler->QueueFrame(instance, pixel_data, width, height, false);
     }

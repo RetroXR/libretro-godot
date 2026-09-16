@@ -250,4 +250,45 @@ inline void Xrgb1555ToRgba8(uint8_t* dst, const void* src,
     }
 }
 
+/// XRGB8888 -> RGBA8, alpha forced opaque. Strides are in BYTES, so src_stride
+/// takes the pitch libretro hands the video callback directly.
+///
+/// The X byte is padding a core never fills, and libretro-common's
+/// conv_argb8888_abgr8888 copies it through as alpha -- so a frame that looks
+/// right through a shader sampling .rgb is fully transparent to anything that
+/// blends, which is every 2D draw and every saved PNG.
+inline void Xrgb8888ToRgba8(uint8_t* dst, const void* src,
+                            uint32_t width, uint32_t height,
+                            size_t dst_stride, size_t src_stride)
+{
+    const uint8_t* in_row = static_cast<const uint8_t*>(src);
+
+    for (uint32_t y = 0; y < height; ++y)
+    {
+#if XENU_PIXEL_BYTEWISE
+        uint8_t* out = dst + static_cast<size_t>(y) * dst_stride;
+        for (uint32_t x = 0; x < width; ++x)
+        {
+            const uint8_t* in = in_row + static_cast<size_t>(x) * 4;
+            *out++ = in[2];
+            *out++ = in[1];
+            *out++ = in[0];
+            *out++ = 0xff;
+        }
+#else
+        const uint32_t* in = reinterpret_cast<const uint32_t*>(in_row);
+        uint32_t* out = reinterpret_cast<uint32_t*>(dst + static_cast<size_t>(y) * dst_stride);
+        for (uint32_t x = 0; x < width; ++x)
+        {
+            const uint32_t p = in[x];
+            out[x] = 0xff000000u
+                   | ((p & 0xffu) << 16)
+                   | (p & 0x0000ff00u)
+                   | ((p >> 16) & 0xffu);
+        }
+#endif
+        in_row += src_stride;
+    }
+}
+
 } // namespace Xenu
