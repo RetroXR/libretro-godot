@@ -17,7 +17,7 @@ Originally forked from [Skurdt/SK.Libretro.Godot](https://github.com/Skurdt/SK.L
 ## Setup
 
 ```bash
-git clone --recursive https://github.com/XenuIsWatching/libretro-godot.git
+git clone --recursive https://github.com/RetroXR/libretro-godot.git
 cd libretro-godot
 ```
 
