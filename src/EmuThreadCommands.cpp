@@ -143,6 +143,7 @@ void EmuThreadCommandFlushSram::Execute(Wrapper& wrapper)
 {
     wrapper.FlushSramIfDirty();
     wrapper.FlushSramBIfDirty();
+    wrapper.FlushRtcIfDirty();
 }
 
 void EmuThreadCommandDiskInfo::Execute(Wrapper& wrapper)

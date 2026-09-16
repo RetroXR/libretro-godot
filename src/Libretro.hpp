@@ -359,6 +359,9 @@ public:
     /// SRAM_B_PCSX_MEMCARD2. See Wrapper::SetSramBPath for why it is a separate
     /// file.
     void SetSramBPath(const godot::String& path, int64_t memory_id);
+    /// The cartridge's real-time clock file, read at the next content load. ""
+    /// keeps no clock. See Wrapper::SetRtcPath.
+    void SetRtcPath(const godot::String& path);
 
     /// Bind one Controller Pak's 32 KiB slice of the single SAVE_RAM block both
     /// N64 cores publish, to a file of its own. `index` is the libretro port.

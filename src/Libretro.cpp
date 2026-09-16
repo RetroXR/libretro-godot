@@ -319,6 +319,11 @@ void Libretro::SetSramBPath(const godot::String& path, int64_t memory_id)
     m_wrapper->SetSramBPath(path, static_cast<unsigned>(memory_id));
 }
 
+void Libretro::SetRtcPath(const godot::String& path)
+{
+    m_wrapper->SetRtcPath(path);
+}
+
 void Libretro::SetSramRegionPath(int index, const godot::String& path, int64_t offset, int64_t length)
 {
     m_wrapper->SetSramRegionPath(index, path, offset, length);
@@ -671,6 +676,7 @@ void Libretro::_bind_methods()
     ClassDB::bind_method(D_METHOD("SetPackPath", "path"), &Libretro::SetPackPath);
     ClassDB::bind_method(D_METHOD("SetSramBPath", "path", "memory_id"), &Libretro::SetSramBPath,
         DEFVAL(static_cast<int64_t>(Wrapper::SRAM_B_SUFAMI_TURBO)));
+    ClassDB::bind_method(D_METHOD("SetRtcPath", "path"), &Libretro::SetRtcPath);
     // Named so a caller passes a region rather than a magic number; each core
     // publishes its own id for a second save region.
     ClassDB::bind_integer_constant(get_class_static(), StringName(),

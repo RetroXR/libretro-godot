@@ -309,6 +309,19 @@ public:
     /// Emu thread: flush the outgoing second region, then adopt a new one.
     void ApplySramBSwap(const std::string& new_path, unsigned memory_id);
 
+    /// The file that holds the cartridge's real-time clock, RETRO_MEMORY_RTC.
+    /// Read at the next content load and written when the clock changes; a path
+    /// set while content runs waits for that load, because a cartridge cannot
+    /// change under a running machine. The bytes are the core's own layout, so
+    /// the file belongs to one core. Not announced through sram_flushed: it is
+    /// not a save anything backs up.
+    void SetRtcPath(const godot::String& path);
+    /// Emu thread: adopt the path SetRtcPath left, fill the clock from its file
+    /// before the first frame, and snapshot it.
+    void LoadRtcFromSource();
+    /// Emu thread: write the clock out iff it changed.
+    void FlushRtcIfDirty(bool final_flush = false);
+
     /// One Controller Pak's 32 KiB, bound to a file of its own inside the ONE
     /// SAVE_RAM block both N64 cores publish. The paks are not separate memory
     /// ids the way the Sufami Turbo's second cartridge is -- all four live in
@@ -811,6 +824,15 @@ public:
     std::string m_sram_b_path;
     std::vector<uint8_t> m_sram_b_shadow;
     unsigned m_sram_b_id = SRAM_B_SUFAMI_TURBO;
+
+    // The cartridge's clock. m_rtc_next_path is the main thread's, under the
+    // mutex; m_rtc_path and the shadow are the emulation thread's, copied from it
+    // at content load.
+    std::mutex m_rtc_mutex;
+    std::string m_rtc_next_path;
+    std::string m_rtc_path;
+    std::vector<uint8_t> m_rtc_shadow;
+    bool m_rtc_on_disk = false;
 
     // One Controller Pak per libretro port. path/offset/length are written from
     // the main thread as paks are seated; the shadow is emulation-thread-only,

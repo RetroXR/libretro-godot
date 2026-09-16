@@ -147,6 +147,7 @@ void Wrapper::EmulationThreadLoop()
             {
                 FlushSramIfDirty(true);
                 FlushSramBIfDirty(true);
+                FlushRtcIfDirty(true);
                 FlushSramRegionsIfDirty(true);
             }
             FlushPackIfDirty(true);
@@ -581,6 +582,9 @@ void Wrapper::EmulationThreadLoop()
     LoadSramFromSource();
     // The second cartridge, on the one adapter that holds two.
     LoadSramBFromSource();
+    // The cartridge's clock. mGBA copies its buffer into the machine on the first
+    // retro_run, so this must land before that too.
+    LoadRtcFromSource();
     // The Controller Paks last: LoadSramFromSource has just put the cartridge
     // .srm's own copy of these bytes in place, and the pak files are the truth.
     LoadSramRegionsFromSource();
@@ -671,6 +675,7 @@ void Wrapper::EmulationThreadLoop()
                 m_sram_flush_counter = fc;
                 FlushSramIfDirty();
                 FlushSramBIfDirty();
+                FlushRtcIfDirty();
                 FlushSramRegionsIfDirty();
                 FlushPackIfDirty();
             }

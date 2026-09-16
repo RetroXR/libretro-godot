@@ -410,6 +410,105 @@ void Wrapper::ApplySramBSwap(const std::string& new_path, unsigned memory_id)
     Log("SRAM B: swapped to " + (new_path.empty() ? std::string("<none>") : new_path));
 }
 
+// -- Real-time clock (RETRO_MEMORY_RTC) --------------------------------------
+
+void Wrapper::SetRtcPath(const godot::String& path)
+{
+    std::string p = path.utf8().get_data();
+    std::lock_guard<std::mutex> lock(m_rtc_mutex);
+    m_rtc_next_path = p;
+    Log("RTC: path set to " + (p.empty() ? std::string("<none>") : p) +
+        (m_running ? " (from the next content load)" : ""));
+}
+
+void Wrapper::LoadRtcFromSource()
+{
+    {
+        std::lock_guard<std::mutex> lock(m_rtc_mutex);
+        m_rtc_path = m_rtc_next_path;
+    }
+    m_rtc_shadow.clear();
+    m_rtc_on_disk = false;
+    if (m_rtc_path.empty() || !m_core || !m_core->retro_get_memory_data || !m_core->retro_get_memory_size)
+        return;
+    uint8_t* rtc = static_cast<uint8_t*>(m_core->retro_get_memory_data(RETRO_MEMORY_RTC));
+    size_t size = m_core->retro_get_memory_size(RETRO_MEMORY_RTC);
+    // No clock on this cartridge, or none this core exposes: no file is kept.
+    if (rtc == nullptr || size == 0)
+        return;
+
+    if (std::filesystem::is_regular_file(m_rtc_path))
+    {
+        std::ifstream file(m_rtc_path, std::ios::binary | std::ios::ate);
+        const size_t file_size = file ? static_cast<size_t>(file.tellg()) : 0;
+        std::vector<uint8_t> bytes(size);
+        if (!file)
+        {
+            LogError("RTC: cannot open " + m_rtc_path + " for reading");
+        }
+        // A clock is the core's own struct: a file of another size is not this
+        // core's, and part of one is not a time.
+        else if (file_size != size)
+        {
+            LogWarning("RTC: " + m_rtc_path + " is " + std::to_string(file_size) +
+                       " bytes but the core's clock is " + std::to_string(size) +
+                       "; the clock starts fresh");
+        }
+        else if (!file.seekg(0, std::ios::beg).read(reinterpret_cast<char*>(bytes.data()), size))
+        {
+            LogError("RTC: short read from " + m_rtc_path + "; the clock starts fresh");
+        }
+        else
+        {
+            std::memcpy(rtc, bytes.data(), size);
+            m_rtc_on_disk = true;
+            Log("RTC: loaded " + std::to_string(size) + " bytes from " + m_rtc_path);
+        }
+    }
+    else
+    {
+        Log("RTC: no file yet at " + m_rtc_path + " (the clock starts fresh)");
+    }
+    m_rtc_shadow.assign(rtc, rtc + size);
+}
+
+void Wrapper::FlushRtcIfDirty(bool final_flush)
+{
+    if (m_rtc_shadow.empty() || !m_core || !m_core->retro_get_memory_data || !m_core->retro_get_memory_size)
+        return;
+    uint8_t* rtc = static_cast<uint8_t*>(m_core->retro_get_memory_data(RETRO_MEMORY_RTC));
+    size_t size = m_core->retro_get_memory_size(RETRO_MEMORY_RTC);
+    if (rtc == nullptr || size != m_rtc_shadow.size())
+        return;
+    // A clock that has never been written is written once even if unchanged: a
+    // clock's value is often a start time, and not keeping it restarts the clock
+    // at zero every power-on.
+    if (m_rtc_on_disk && std::memcmp(m_rtc_shadow.data(), rtc, size) == 0)
+        return;
+
+    std::error_code ec;
+    std::filesystem::create_directories(std::filesystem::path(m_rtc_path).parent_path(), ec);
+    std::ofstream file(m_rtc_path, std::ios::binary | std::ios::trunc);
+    if (!file)
+    {
+        LogError("RTC: cannot write " + m_rtc_path);
+        return;
+    }
+    file.write(reinterpret_cast<const char*>(rtc), size);
+    file.close();
+    if (!file)
+    {
+        LogError("RTC: short write to " + m_rtc_path + "; will retry on the next flush");
+        return;
+    }
+    m_rtc_shadow.assign(rtc, rtc + size);
+    m_rtc_on_disk = true;
+    // Only the last write is announced: a clock that counts seconds is dirty at
+    // every periodic check.
+    if (final_flush)
+        Log("RTC: flushed " + std::to_string(size) + " bytes to " + m_rtc_path + " (final)");
+}
+
 void Wrapper::SetMemoryDescriptors(const retro_memory_map* memory_maps)
 {
     m_memory_descriptors.clear();
