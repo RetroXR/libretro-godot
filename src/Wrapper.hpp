@@ -360,10 +360,10 @@ public:
     /// a cartridge swapped while the pak stayed seated.
     void SetTransferPak(int port, const godot::String& rom_path, const godot::String& ram_path);
     void ClearTransferPak(int port);
-    /// Where that cartridge's real-time clock is kept, served through
-    /// RETRO_ENVIRONMENT_GET_TRANSFER_PAK_CLOCK_INTERFACE. Set before
-    /// SetTransferPak: the core asks when the cartridge is next read, which the
-    /// generation SetTransferPak bumps is what triggers.
+    /// Where that cartridge's real-time clock is kept, served through the same
+    /// interface's get_rtc. Set before SetTransferPak: the core asks when the
+    /// cartridge is next read, which the generation SetTransferPak bumps is what
+    /// triggers.
     void SetTransferPakClock(int port, const godot::String& rtc_path);
 
     /// Emu thread, called from the interface trampolines. The returned pointer

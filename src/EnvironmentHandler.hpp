@@ -121,7 +121,6 @@ private:
     bool GetClearAllThreadWaitsCb(retro_environment_t* env);
     bool GetLinkInterface(retro_link_interface* link_interface);
     bool GetTransferPakInterface(retro_transfer_pak_interface* iface, Wrapper* instance);
-    bool GetTransferPakClockInterface(retro_transfer_pak_clock_interface* iface, Wrapper* instance);
     bool GetControllerAudioInterface(retro_controller_audio_interface* iface, Wrapper* instance);
     bool GetControllerDisplayInterface(retro_controller_display_interface* iface, Wrapper* instance);
 };
