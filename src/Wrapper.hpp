@@ -360,12 +360,18 @@ public:
     /// a cartridge swapped while the pak stayed seated.
     void SetTransferPak(int port, const godot::String& rom_path, const godot::String& ram_path);
     void ClearTransferPak(int port);
+    /// Where that cartridge's real-time clock is kept, served through
+    /// RETRO_ENVIRONMENT_GET_TRANSFER_PAK_CLOCK_INTERFACE. Set before
+    /// SetTransferPak: the core asks when the cartridge is next read, which the
+    /// generation SetTransferPak bumps is what triggers.
+    void SetTransferPakClock(int port, const godot::String& rtc_path);
 
     /// Emu thread, called from the interface trampolines. The returned pointer
     /// stays valid until the next call for the same port, which is the contract
     /// the core copies under.
     const char* TransferPakRomFor(unsigned port);
     const char* TransferPakRamFor(unsigned port);
+    const char* TransferPakRtcFor(unsigned port);
     unsigned TransferPakGenerationFor(unsigned port);
 
     /// Front-panel reset: retro_reset on the emulation thread, between frames.
@@ -877,6 +883,8 @@ public:
     std::array<unsigned, RETRO_TRANSFER_PAK_PORTS> m_transfer_pak_generation{};
     std::array<std::string, RETRO_TRANSFER_PAK_PORTS> m_transfer_pak_rom_view;
     std::array<std::string, RETRO_TRANSFER_PAK_PORTS> m_transfer_pak_ram_view;
+    std::array<std::string, RETRO_TRANSFER_PAK_PORTS> m_transfer_pak_rtc;
+    std::array<std::string, RETRO_TRANSFER_PAK_PORTS> m_transfer_pak_rtc_view;
     std::mutex m_transfer_pak_mutex;
 
     std::string m_root_directory;

@@ -66,6 +66,28 @@ struct retro_transfer_pak_interface
    unsigned (*generation)(void *frontend_data, unsigned port);
 };
 
+/* Where the real-time clock of the cartridge in a Transfer Pak is kept.
+ *
+ * A call of its own rather than a member above: retro_transfer_pak_interface has
+ * no version field, and a frontend filling a longer struct than an older core
+ * allocated would write past its end. A core that never asks keeps no clock, and a
+ * frontend that does not answer leaves the clock unkept. */
+#define RETRO_ENVIRONMENT_GET_TRANSFER_PAK_CLOCK_INTERFACE       (97 | RETRO_ENVIRONMENT_EXPERIMENTAL)
+#define RETRO_ENVIRONMENT_GET_TRANSFER_PAK_CLOCK_INTERFACE_FINAL 97
+
+struct retro_transfer_pak_clock_interface
+{
+   /* Passed back to every call below. */
+   void *frontend_data;
+
+   /* The file that keeps the clock of the cartridge in `port`'s pak, or NULL/""
+    * to keep none. Same ownership as get_ram. Asked only for a cartridge that has
+    * a clock. The core keeps 48 bytes: little-endian uint32 seconds, minutes,
+    * hours, days low and days high, the same five latched, then a uint64 host
+    * time. */
+   const char *(*get_rtc)(void *frontend_data, unsigned port);
+};
+
 #ifdef __cplusplus
 }
 #endif

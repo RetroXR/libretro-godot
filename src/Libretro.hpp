@@ -372,6 +372,8 @@ public:
     /// where that cartridge's battery lives. Per PORT, unlike the `gb` subsystem
     /// and the sidecar, which share one cartridge across all four paks.
     void SetTransferPak(int port, const godot::String& rom_path, const godot::String& ram_path);
+    /// Where that cartridge's real-time clock is kept. Set before SetTransferPak.
+    void SetTransferPakClock(int port, const godot::String& rtc_path);
     void ClearTransferPak(int port);
     /// Netplay: inject exact SRAM bytes applied at load instead of the file.
     void SetSramData(const godot::PackedByteArray& data);

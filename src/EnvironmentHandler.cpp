@@ -153,6 +153,8 @@ static bool runloop_clear_all_thread_waits(uint32_t clear_threads, void* data)
     X(RETRO_ENVIRONMENT_GET_LINK_INTERFACE_FINAL) \
     X(RETRO_ENVIRONMENT_GET_TRANSFER_PAK_INTERFACE) \
     X(RETRO_ENVIRONMENT_GET_TRANSFER_PAK_INTERFACE_FINAL) \
+    X(RETRO_ENVIRONMENT_GET_TRANSFER_PAK_CLOCK_INTERFACE) \
+    X(RETRO_ENVIRONMENT_GET_TRANSFER_PAK_CLOCK_INTERFACE_FINAL) \
     X(RETRO_ENVIRONMENT_GET_CONTROLLER_AUDIO_INTERFACE) \
     X(RETRO_ENVIRONMENT_GET_CONTROLLER_AUDIO_INTERFACE_FINAL) \
     X(RETRO_ENVIRONMENT_GET_CONTROLLER_DISPLAY_INTERFACE) \
@@ -364,6 +366,8 @@ bool EnvironmentHandler::Callback(uint32_t cmd, void* data)
     case RETRO_ENVIRONMENT_GET_LINK_INTERFACE_FINAL:                            return instance->m_environment_handler->GetLinkInterface(static_cast<retro_link_interface*>(data));
     case RETRO_ENVIRONMENT_GET_TRANSFER_PAK_INTERFACE:
     case RETRO_ENVIRONMENT_GET_TRANSFER_PAK_INTERFACE_FINAL:                     return instance->m_environment_handler->GetTransferPakInterface(static_cast<retro_transfer_pak_interface*>(data), instance);
+    case RETRO_ENVIRONMENT_GET_TRANSFER_PAK_CLOCK_INTERFACE:
+    case RETRO_ENVIRONMENT_GET_TRANSFER_PAK_CLOCK_INTERFACE_FINAL:               return instance->m_environment_handler->GetTransferPakClockInterface(static_cast<retro_transfer_pak_clock_interface*>(data), instance);
     case RETRO_ENVIRONMENT_GET_CONTROLLER_AUDIO_INTERFACE:
     case RETRO_ENVIRONMENT_GET_CONTROLLER_AUDIO_INTERFACE_FINAL:                 return instance->m_environment_handler->GetControllerAudioInterface(static_cast<retro_controller_audio_interface*>(data), instance);
     case RETRO_ENVIRONMENT_GET_CONTROLLER_DISPLAY_INTERFACE:                     return instance->m_environment_handler->GetControllerDisplayInterface(static_cast<retro_controller_display_interface*>(data), instance);
@@ -862,6 +866,22 @@ unsigned TransferPakGenerationTrampoline(void* frontend_data, unsigned port)
 {
     return static_cast<Wrapper*>(frontend_data)->TransferPakGenerationFor(port);
 }
+
+const char* TransferPakRtcTrampoline(void* frontend_data, unsigned port)
+{
+    return static_cast<Wrapper*>(frontend_data)->TransferPakRtcFor(port);
+}
+}
+
+bool EnvironmentHandler::GetTransferPakClockInterface(retro_transfer_pak_clock_interface* iface, Wrapper* instance)
+{
+    if (!iface || !instance)
+    {
+        return false;
+    }
+    iface->frontend_data = instance;
+    iface->get_rtc       = &TransferPakRtcTrampoline;
+    return true;
 }
 
 bool EnvironmentHandler::GetTransferPakInterface(retro_transfer_pak_interface* iface, Wrapper* instance)

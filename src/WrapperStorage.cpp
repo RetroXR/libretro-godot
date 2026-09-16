@@ -832,7 +832,25 @@ void Wrapper::SetTransferPak(int port, const godot::String& rom_path, const godo
 
 void Wrapper::ClearTransferPak(int port)
 {
+    SetTransferPakClock(port, godot::String());
     SetTransferPak(port, godot::String(), godot::String());
+}
+
+void Wrapper::SetTransferPakClock(int port, const godot::String& rtc_path)
+{
+    if (port < 0 || port >= RETRO_TRANSFER_PAK_PORTS)
+        return;
+    std::lock_guard<std::mutex> lock(m_transfer_pak_mutex);
+    m_transfer_pak_rtc[port] = rtc_path.utf8().get_data();
+}
+
+const char* Wrapper::TransferPakRtcFor(unsigned port)
+{
+    if (port >= RETRO_TRANSFER_PAK_PORTS)
+        return nullptr;
+    std::lock_guard<std::mutex> lock(m_transfer_pak_mutex);
+    m_transfer_pak_rtc_view[port] = m_transfer_pak_rtc[port];
+    return m_transfer_pak_rtc_view[port].empty() ? nullptr : m_transfer_pak_rtc_view[port].c_str();
 }
 
 const char* Wrapper::TransferPakRomFor(unsigned port)

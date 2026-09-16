@@ -342,6 +342,12 @@ void Libretro::SetTransferPak(int port, const godot::String& rom_path, const god
 }
 
 
+void Libretro::SetTransferPakClock(int port, const godot::String& rtc_path)
+{
+    m_wrapper->SetTransferPakClock(port, rtc_path);
+}
+
+
 void Libretro::ClearTransferPak(int port)
 {
     m_wrapper->ClearTransferPak(port);
@@ -686,6 +692,7 @@ void Libretro::_bind_methods()
     ClassDB::bind_method(D_METHOD("SetSramRegionPath", "index", "path", "offset", "length"), &Libretro::SetSramRegionPath);
     ClassDB::bind_method(D_METHOD("ClearSramRegion", "index"), &Libretro::ClearSramRegion);
     ClassDB::bind_method(D_METHOD("SetTransferPak", "port", "rom_path", "ram_path"), &Libretro::SetTransferPak);
+    ClassDB::bind_method(D_METHOD("SetTransferPakClock", "port", "rtc_path"), &Libretro::SetTransferPakClock);
     ClassDB::bind_method(D_METHOD("ClearTransferPak", "port"), &Libretro::ClearTransferPak);
     ClassDB::bind_method(D_METHOD("SetSramData", "data"), &Libretro::SetSramData);
     ClassDB::bind_method(D_METHOD("SetRemovableStorage", "removable"), &Libretro::SetRemovableStorage);
