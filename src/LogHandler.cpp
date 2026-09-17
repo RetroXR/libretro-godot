@@ -4,6 +4,7 @@
 
 #include <cstdarg>
 #include <cstdio>
+#include <cstring>
 
 #include "Wrapper.hpp"
 #include "CallbackTrampolines.hpp"
@@ -37,6 +38,14 @@ void LogHandler::LogInterfaceLog(retro_log_level level, const char* fmt, ...)
     va_start(args, fmt);
     char buffer[512];
     vsnprintf(buffer, sizeof(buffer), fmt, args);
+
+    // A libretro core ends a message with its own newline, because RetroArch
+    // prints the text as it arrives. print_line_rich adds one too, which left a
+    // blank line under every message from every core that follows the
+    // convention.
+    size_t length = strnlen(buffer, sizeof(buffer));
+    while (length > 0 && (buffer[length - 1] == '\n' || buffer[length - 1] == '\r'))
+        buffer[--length] = '\0';
 
     switch (level)
     {
