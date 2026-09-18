@@ -130,6 +130,22 @@ public:
     /// Main thread only, under m_sink_mutex.
     bool SetSurroundEnabled(bool on);
 
+    /// Send the six decoded channels to the output device's own speakers too,
+    /// through `matrix` -- 48 gains, `matrix[in * 8 + out]`, the device's FL, FR,
+    /// C, LFE, back L/R, side L/R out. Empty stops it.
+    ///
+    /// For a player whose PC is wired for 5.1 or 7.1: the voices render
+    /// binaural stereo only, which on such a device plays out of the front pair
+    /// alone. The voices go on being fed while this runs, at whatever gain
+    /// GDScript gives them (zero, to be heard once): the brake and the rate trim
+    /// read m_voice_l, and a sink they cannot see is the bug AcquireSurroundVoices
+    /// records. The ring is stood at the front voice's depth before its first
+    /// push, so the two queues are the same delay and drain at the same rate.
+    ///
+    /// Returns whether it is engaged: false while surround is not, and where the
+    /// surround extension cannot make an output. Main thread only.
+    bool SetSurroundDiscrete(const godot::PackedFloat32Array& matrix);
+
     /// Frames of delay the decoder adds, or 0 when it is not engaged. A
     /// controller voice is pre-filled to the main voice's depth so a Wii Remote
     /// beep lands with the game's own sound, and without this the beep would lead
@@ -207,6 +223,9 @@ private:
     /// Take or hand back the four extra voices. Under m_sink_mutex.
     bool AcquireSurroundVoices();
     void ReleaseSurroundVoices();
+    /// SurroundOutput, held as RefCounted for the reason m_decoder is. Null
+    /// unless SetSurroundDiscrete engaged it.
+    godot::Ref<godot::RefCounted> m_discrete;
     double m_mix_rate = 48000.0;
     std::atomic<int> m_channel_mode{0};   ///< see SetChannelMode
 

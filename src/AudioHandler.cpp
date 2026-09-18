@@ -173,12 +173,24 @@ void AudioHandler::PushFrames(const float* interleaved, size_t frames)
             if (m_decoded.size() == k_surround_channels)
             {
                 if (static_cast<PackedFloat32Array>(m_decoded[0]).size() > 0)
+                {
                     LevelSurroundVoices(mx);
+                    // Levelled against the fronts BEFORE they take this batch,
+                    // so both queues end the push at the same depth.
+                    if (m_discrete.is_valid() && static_cast<int>(m_discrete->call("queued")) == 0)
+                    {
+                        const int front = static_cast<int>(mx->call("voice_frames_available", m_voice_l));
+                        if (front > 0)
+                            m_discrete->call("push_silence", front);
+                    }
+                }
                 for (int ch = 0; ch < k_surround_channels; ++ch)
                 {
                     if (m_surround_voices[ch] >= 0)
                         mx->call("push_voice_frames", m_surround_voices[ch], m_decoded[ch]);
                 }
+                if (m_discrete.is_valid())
+                    m_discrete->call("push", m_decoded);
                 return;
             }
             // A decoder that answered with the wrong shape is a bug, not a
@@ -517,6 +529,8 @@ bool AudioHandler::ReinitSampleRate(double sample_rate)
             mx->call("flush_voice", m_voice_l);
             if (m_voice_r >= 0)
                 mx->call("flush_voice", m_voice_r);
+            if (m_discrete.is_valid())
+                m_discrete->call("flush");
             FlushControllerVoices();
         }
         else if (AudioStreamPlayer3D* player = LivePlayer())
@@ -663,6 +677,8 @@ void AudioHandler::SilenceForTeardown()
         }
         if (m_decoder.is_valid())
             m_decoder->call("flush");
+        if (m_discrete.is_valid())
+            m_discrete->call("flush");
     }
     FlushControllerVoices();
 }
@@ -737,6 +753,10 @@ void AudioHandler::SetPlaying(bool playing)
             if (m_voice_r >= 0)
                 mx->call("flush_voice", m_voice_r);
         }
+        // Its queue beside them, or a paused core's last block plays on out of
+        // the room's speakers and replays when it resumes.
+        if (!playing && m_discrete.is_valid())
+            m_discrete->call("flush");
         if (!playing)
             FlushControllerVoices();
         if (playing && m_audio_sample_rate > 0.0 &&
@@ -840,6 +860,37 @@ bool AudioHandler::SetSurroundEnabled(bool on)
     return true;
 }
 
+bool AudioHandler::SetSurroundDiscrete(const PackedFloat32Array& matrix)
+{
+    std::lock_guard<std::recursive_mutex> lock(m_sink_mutex);
+    if (matrix.is_empty() || !m_surround.load(std::memory_order_relaxed))
+    {
+        if (m_discrete.is_valid())
+            Log("Audio: surround back on the voices alone");
+        m_discrete.unref();
+        return false;
+    }
+    if (m_discrete.is_null())
+    {
+        Engine* engine = Engine::get_singleton();
+        if (engine == nullptr || !engine->has_singleton("SurroundAudio"))
+            return false;
+        Object* factory = engine->get_singleton("SurroundAudio");
+        if (factory == nullptr)
+            return false;
+        Variant made = factory->call("create_output");
+        Ref<RefCounted> out = made;
+        if (out.is_null())
+            return false;
+        // Empty, and the next push stands it at the fronts' depth before adding
+        // to it -- see PushFrames.
+        m_discrete = out;
+        LogOK("Audio: surround to the output device's own speakers");
+    }
+    m_discrete->call("set_matrix", matrix);
+    return true;
+}
+
 void AudioHandler::LevelSurroundVoices(Object* mx)
 {
     // A queue is a delay, so six voices at different depths play the same instant
@@ -924,6 +975,9 @@ void AudioHandler::ReleaseSurroundVoices()
     for (int ch = 0; ch < k_surround_channels; ++ch)
         m_surround_voices[ch] = -1;
     m_decoder.unref();
+    // Nothing is decoded for it any more. Dropping the handle unregisters its
+    // queue from the device, and the set asks again if it still wants one.
+    m_discrete.unref();
     m_decoded = Array();
     m_surround_latency = 0;
     if (was_on)
