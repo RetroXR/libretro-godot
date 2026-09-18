@@ -44,7 +44,13 @@ bool OptionsHandler::GetVariable(retro_variable* variable)
 
     std::string key(variable->key);
     if (!m_variables.contains(key))
+    {
+        // libretro.h: the frontend sets value to NULL for an option it does not
+        // hold. Leaving the OUT parameter alone hands the core whatever was on
+        // its stack.
+        variable->value = nullptr;
         return true;
+    }
 
     // NOTE: variable->value is an OUT parameter, and cores pass it UNINITIALIZED
     // (legacy melonds on Android hands us stack garbage). Never read it.
@@ -148,6 +154,14 @@ bool OptionsHandler::SetCoreOptions(const retro_core_option_definition* definiti
         for (auto value = definition->values; value->value; ++value)
             values.emplace_back(value->value, value->label ? value->label : "");
 
+        // A NULL default_value means the FIRST value, the rule the v0 path above
+        // applies to its "a|b|c" list. Dropping the key instead leaves it out of
+        // m_variables, and then every route to it fails silently: the file value
+        // is skipped, SetVariable refuses it and GetVariable never answers.
+        // mupen64plus-next declares all 14 of its ParaLLEl-RDP options this way.
+        std::string default_value = definition->default_value ? definition->default_value
+                                  : (values.empty() ? std::string() : values[0].value);
+
         m_definitions.emplace(definition->key,
             OptionDefinition{ definition->desc          ? definition->desc : "",
                               "",
@@ -155,10 +169,9 @@ bool OptionsHandler::SetCoreOptions(const retro_core_option_definition* definiti
                               "",
                               "",
                               std::move(values),
-                              definition->default_value ? definition->default_value : "" });
+                              default_value });
 
-        if (definition->default_value)
-            m_variables[definition->key] = definition->default_value;
+        m_variables[definition->key] = default_value;
     }
 
     DeserializeFromFile();
@@ -201,16 +214,22 @@ bool OptionsHandler::SetCoreOptionsV2(const retro_core_options_v2* options)
             option_definition_values.emplace_back(option_definition_value->value ? option_definition_value->value : "",
                                                   option_definition_value->label ? option_definition_value->label : "");
 
+        // A NULL default_value is the first value here too; see SetCoreOptions.
+        std::string default_value = definition->default_value
+                                  ? definition->default_value
+                                  : (option_definition_values.empty()
+                                        ? std::string()
+                                        : option_definition_values[0].value);
+
         m_definitions.emplace(definition->key, OptionDefinition{ definition->desc             ? definition->desc : "",
                                                                  definition->desc_categorized ? definition->desc_categorized : "",
                                                                  definition->info             ? definition->info : "",
                                                                  definition->info_categorized ? definition->info_categorized : "",
                                                                  definition->category_key     ? definition->category_key : "",
                                                                  std::move(option_definition_values),
-                                                                 definition->default_value    ? definition->default_value : "" });
+                                                                 default_value });
 
-        if (definition->key && definition->default_value)
-            m_variables[definition->key] = definition->default_value;
+        m_variables[definition->key] = default_value;
     }
 
     DeserializeFromFile();
