@@ -172,6 +172,8 @@ void AudioHandler::PushFrames(const float* interleaved, size_t frames)
             m_decoded = m_decoder->call("decode", m_push_buf);
             if (m_decoded.size() == k_surround_channels)
             {
+                if (static_cast<PackedFloat32Array>(m_decoded[0]).size() > 0)
+                    LevelSurroundVoices(mx);
                 for (int ch = 0; ch < k_surround_channels; ++ch)
                 {
                     if (m_surround_voices[ch] >= 0)
@@ -653,7 +655,8 @@ void AudioHandler::SilenceForTeardown()
     // flushed with them: its STFT holds half a window of the old stream.
     if (mx && m_surround.load(std::memory_order_relaxed))
     {
-        for (int ch = 0; ch < k_surround_channels; ++ch)
+        // From the third: the front pair is m_voice_l/m_voice_r, flushed above.
+        for (int ch = k_front_pair; ch < k_surround_channels; ++ch)
         {
             if (m_surround_voices[ch] >= 0)
                 mx->call("flush_voice", m_surround_voices[ch]);
@@ -770,8 +773,7 @@ PackedInt32Array AudioHandler::GetVoiceIds() const
         return ids;
     // While surround is engaged these are the six the sound comes out of, in the
     // decoder's own order, and GDScript places them from the set's six positions.
-    // m_voice_l/m_voice_r are still alive underneath and still carry the brake;
-    // they are simply not being pushed to.
+    // The first two are m_voice_l/m_voice_r, carrying FL and FR.
     if (m_surround.load(std::memory_order_relaxed) && m_surround_voices[0] >= 0)
     {
         for (int ch = 0; ch < k_surround_channels; ++ch)
@@ -838,24 +840,65 @@ bool AudioHandler::SetSurroundEnabled(bool on)
     return true;
 }
 
+void AudioHandler::LevelSurroundVoices(Object* mx)
+{
+    // A queue is a delay, so six voices at different depths play the same instant
+    // at different times. The front pair is m_voice_l/m_voice_r and carries the
+    // stereo backlog across the switch while the four voices SetSurroundEnabled
+    // added start empty — measured, FL and FR played 12 to 18 ms behind the centre
+    // for as long as the machine stayed in surround, inside the range where the ear
+    // pulls a sound toward whichever speaker is first.
+    //
+    // An empty channel voice is topped up with silence to the front pair's depth,
+    // the way PushControllerFrames lines a controller voice up with the game. Only
+    // an EMPTY one: that is both the state a new voice starts in and the state the
+    // mixer leaves one in when AdmitOnFirstPose drops a backlog pushed before its
+    // pose arrived, so a top-up the admission discarded is simply made again.
+    const int front = static_cast<int>(mx->call("voice_frames_available", m_voice_l));
+    if (front <= 0)
+        return;
+    for (int ch = k_front_pair; ch < k_surround_channels; ++ch)
+    {
+        const int voice = m_surround_voices[ch];
+        if (voice < 0 || static_cast<int>(mx->call("voice_frames_available", voice)) != 0)
+            continue;
+        if (m_silence.size() != front)
+        {
+            m_silence.resize(front);
+            m_silence.fill(0.0f);
+        }
+        mx->call("push_voice_frames", voice, m_silence);
+    }
+}
+
 bool AudioHandler::AcquireSurroundVoices()
 {
     Object* mx = LiveMx();
     if (mx == nullptr)
         return false;
-    // The front pair takes voices of its own rather than reusing
-    // m_voice_l/m_voice_r, so the stereo path stays byte-identical and the brake
-    // goes on measuring the one voice it always has. Six new voices on a mixer
-    // that already holds two.
-    int made[k_surround_channels];
-    for (int ch = 0; ch < k_surround_channels; ++ch)
+    if (m_voice_l < 0 || m_voice_r < 0)
+        return false;
+    // The front pair IS m_voice_l/m_voice_r, and that is load-bearing. The
+    // emulation brake and the rate trim both read the depth of m_voice_l
+    // (QueuedFrames, MsUntilSinkWantsFrames), so it has to be a voice this path
+    // actually feeds. The first build gave the fronts voices of their own and left
+    // m_voice_l unpushed: its depth read empty for ever, the brake never held the
+    // core, the rate trim leant fast, and the six crept toward their 32768-frame
+    // rings — about 4 ms more latency every second until a player heard the game
+    // most of a second late. The two idle voices also underran every block.
+    //
+    // All six are pushed the same frames each batch, so FL's depth is every
+    // channel's depth. Four new voices, which is the budget the voice-count
+    // reasoning in SetSurroundEnabled was written for.
+    int made[k_surround_channels] = {m_voice_l, m_voice_r, -1, -1, -1, -1};
+    for (int ch = k_front_pair; ch < k_surround_channels; ++ch)
     {
         made[ch] = static_cast<int>(mx->call("create_voice"));
         if (made[ch] >= 0)
             continue;
         // Out of voices. Hand back the ones already taken and stay on stereo —
         // degrade, never go silent.
-        for (int done = 0; done < ch; ++done)
+        for (int done = k_front_pair; done < ch; ++done)
             mx->call("destroy_voice", made[done]);
         LogWarning("Audio: surround refused, the mixer has no voices left");
         return false;
@@ -870,7 +913,9 @@ void AudioHandler::ReleaseSurroundVoices()
     const bool was_on = m_surround.exchange(false, std::memory_order_acq_rel);
     if (Object* mx = LiveMx())
     {
-        for (int ch = 0; ch < k_surround_channels; ++ch)
+        // Not the front pair: those are m_voice_l/m_voice_r, which the stereo path
+        // goes straight back to using.
+        for (int ch = k_front_pair; ch < k_surround_channels; ++ch)
         {
             if (m_surround_voices[ch] >= 0)
                 mx->call("destroy_voice", m_surround_voices[ch]);

@@ -184,10 +184,10 @@ private:
 
     // --- surround -----------------------------------------------------------
     /// FL, FR, C, LFE, SL, SR -- the decoder's own output order. The first two
-    /// are NOT m_voice_l/m_voice_r: those two stay exactly what they were so the
-    /// stereo path, the brake and every existing reader are untouched, and the
-    /// front pair gets voices of its own while surround is engaged.
+    /// ARE m_voice_l/m_voice_r, so the voice the brake measures is one this path
+    /// feeds; see AcquireSurroundVoices for what it cost when they were not.
     static constexpr int k_surround_channels = 6;
+    static constexpr int k_front_pair = 2;
     int m_surround_voices[k_surround_channels] = {-1, -1, -1, -1, -1, -1};
     /// Read on the emulation thread every batch, written from the main one. A
     /// torn read costs one buffer pushed the old way.
@@ -200,6 +200,10 @@ private:
     /// The Array of six PackedFloat32Array the decoder last returned. Held so a
     /// steady stream reuses it rather than allocating an Array a batch.
     godot::Array m_decoded;
+    /// Top an empty channel voice up with silence to the front pair's depth, so
+    /// all six play in step. Under m_sink_mutex. See the definition.
+    void LevelSurroundVoices(godot::Object* mx);
+    godot::PackedFloat32Array m_silence;
     /// Take or hand back the four extra voices. Under m_sink_mutex.
     bool AcquireSurroundVoices();
     void ReleaseSurroundVoices();
