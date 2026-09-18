@@ -648,6 +648,19 @@ void AudioHandler::SilenceForTeardown()
         if (m_voice_r >= 0)
             mx->call("flush_voice", m_voice_r);
     }
+    // The six as well, or a stopped core leaves up to a block of its audio in
+    // their rings for whatever takes those slots next to play. The decoder is
+    // flushed with them: its STFT holds half a window of the old stream.
+    if (mx && m_surround.load(std::memory_order_relaxed))
+    {
+        for (int ch = 0; ch < k_surround_channels; ++ch)
+        {
+            if (m_surround_voices[ch] >= 0)
+                mx->call("flush_voice", m_surround_voices[ch]);
+        }
+        if (m_decoder.is_valid())
+            m_decoder->call("flush");
+    }
     FlushControllerVoices();
 }
 
@@ -659,6 +672,10 @@ void AudioHandler::DeInit()
     std::lock_guard<std::recursive_mutex> sink_lock(m_sink_mutex);
 
     ReleaseControllerVoices(true);
+    // Before m_use_sdk is cleared below, for the reason the controller voices are
+    // released first: LiveMx() is gated on it, so afterwards there is nothing to
+    // hand the four extra voices back to and they are leaked for the process.
+    ReleaseSurroundVoices();
     if (Object* mx = m_use_sdk ? LiveMx() : nullptr)
     {
         if (m_voice_l >= 0)
