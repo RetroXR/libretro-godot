@@ -5,6 +5,9 @@
 #include <godot_cpp/classes/audio_stream_generator_playback.hpp>
 #include <godot_cpp/classes/audio_stream_player3d.hpp>
 #include <godot_cpp/classes/object.hpp>
+#include <godot_cpp/classes/ref_counted.hpp>
+#include <godot_cpp/variant/array.hpp>
+#include <godot_cpp/variant/packed_float32_array.hpp>
 #include <godot_cpp/variant/packed_int32_array.hpp>
 #include <godot_cpp/variant/packed_vector2_array.hpp>
 
@@ -111,7 +114,30 @@ public:
     /// at worst one buffer routed the old way.
     void SetChannelMode(int mode) { m_channel_mode.store(mode, std::memory_order_relaxed); }
 
+    /// Decode the stereo pair into six placed channels, or stop.
+    ///
+    /// Opt-in per machine rather than a process-wide mode, because voices are
+    /// scarce: the mixer has 32, and a machine costs 2 main plus up to 8
+    /// controller voices today. At 6 main voices five powered-on machines is 30 of
+    /// 32, so the four extra are taken only while a set asks for surround and
+    /// handed back when it stops.
+    ///
+    /// Returns what is actually engaged, which is false when the extension is
+    /// absent, when the mixer has no voices left, or when the fallback backend is
+    /// in use -- in every case the stereo path goes on working unchanged. Degrade
+    /// to stereo, never to silence.
+    ///
+    /// Main thread only, under m_sink_mutex.
+    bool SetSurroundEnabled(bool on);
+
+    /// Frames of delay the decoder adds, or 0 when it is not engaged. A
+    /// controller voice is pre-filled to the main voice's depth so a Wii Remote
+    /// beep lands with the game's own sound, and without this the beep would lead
+    /// the game by the whole window.
+    uint32_t SurroundLatencyFrames() const;
+
     static constexpr unsigned k_controller_ports = 4;
+
     static constexpr unsigned k_controller_devices = 2;
 
     /// One block of a controller's own sound, handed over through
@@ -155,6 +181,28 @@ private:
     int    m_voice_l = -1;
     int    m_voice_r = -1;
     bool   m_use_sdk = false;
+
+    // --- surround -----------------------------------------------------------
+    /// FL, FR, C, LFE, SL, SR -- the decoder's own output order. The first two
+    /// are NOT m_voice_l/m_voice_r: those two stay exactly what they were so the
+    /// stereo path, the brake and every existing reader are untouched, and the
+    /// front pair gets voices of its own while surround is engaged.
+    static constexpr int k_surround_channels = 6;
+    int m_surround_voices[k_surround_channels] = {-1, -1, -1, -1, -1, -1};
+    /// Read on the emulation thread every batch, written from the main one. A
+    /// torn read costs one buffer pushed the old way.
+    std::atomic<bool> m_surround{false};
+    /// SurroundDecoder, held as RefCounted because this extension is built
+    /// against a godot-cpp that cannot name the class -- see SurroundAudio.hpp.
+    /// One per handler: the STFT carries state across blocks.
+    godot::Ref<godot::RefCounted> m_decoder;
+    uint32_t m_surround_latency = 0;
+    /// The Array of six PackedFloat32Array the decoder last returned. Held so a
+    /// steady stream reuses it rather than allocating an Array a batch.
+    godot::Array m_decoded;
+    /// Take or hand back the four extra voices. Under m_sink_mutex.
+    bool AcquireSurroundVoices();
+    void ReleaseSurroundVoices();
     double m_mix_rate = 48000.0;
     std::atomic<int> m_channel_mode{0};   ///< see SetChannelMode
 

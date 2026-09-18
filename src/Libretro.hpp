@@ -246,6 +246,10 @@ public:
 
     /// 0 stereo, 1 the left channel to both speakers, 2 the right to both.
     void SetAudioChannelMode(int mode);
+    /// Decode the stereo pair into six placed channels. Returns what is
+    /// actually engaged, which is false wherever the decoder or the voices are
+    /// unavailable — the stereo path then goes on working unchanged.
+    bool SetSurroundEnabled(bool on);
 
     /// Tell the running core which device type is active on a given port.
     void SetControllerPortDevice(int port, int device);
