@@ -336,7 +336,7 @@ void Wrapper::EmulationThreadLoop()
         // which is what a core detecting no-content with `if (!info)` expects; a
         // zeroed struct is the one that does not fault on a core that reads the
         // argument without checking.
-        const bool pass_null = GetNoContentPassesNull();
+        const bool pass_null = m_no_content_passes_null;
         Log(std::string("Starting with no content, passing ") +
             (pass_null ? "a null game info" : "a zeroed game info") + ".");
 

@@ -893,6 +893,10 @@ public:
     retro_log_level m_log_level = RETRO_LOG_WARN;
 
     std::string m_game_path;
+    // GetNoContentPassesNull() as it stood when this run was STARTED. The
+    // emulation thread loads the content later, by which time the caller has
+    // already put the global back -- reading it there raced, and lost.
+    bool m_no_content_passes_null = true;
 
     std::vector<unsigned char> m_game_buffer;
 

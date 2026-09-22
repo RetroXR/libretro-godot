@@ -97,6 +97,8 @@ void Wrapper::StartSubsystemContent(const std::string& root_directory, const std
 
     StopEmulationThread();
 
+    m_no_content_passes_null = GetNoContentPassesNull();
+
     m_microphone_handler->ReleaseAll();
     m_microphone_handler->SetSuspended(false);
 
