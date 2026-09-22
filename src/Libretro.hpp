@@ -335,6 +335,12 @@ public:
     /// WiiUtils::UpdateResult (0 installed, 1 already up to date), or -1 when
     /// the core cannot be opened and -2 when it is too old to have the export.
     /// Opens the core in place, like PeekCoreOptions.
+    /// Does this installed core export `symbol`? For features that live in a
+    /// fork's own exports (RunWiiSystemUpdate), so a UI can say "update the
+    /// core" before the player presses anything. Opens the core in place, like
+    /// PeekCoreOptions; false when the core is not installed at all.
+    static bool CoreHasExport(const godot::String& root_directory, const godot::String& core_name,
+                              const godot::String& symbol);
     static int32_t RunWiiSystemUpdate(const godot::String& root_directory, const godot::String& core_name,
                                       const godot::String& user_dir, const godot::String& sys_dir,
                                       const godot::String& region, const godot::Callable& progress);

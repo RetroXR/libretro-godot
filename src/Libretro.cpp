@@ -571,6 +571,20 @@ int WiiUpdateProgressTrampoline(void* userdata, size_t processed, size_t total, 
 }
 }
 
+bool Libretro::CoreHasExport(const String& root_directory, const String& core_name, const String& symbol)
+{
+    const std::string core_path = Wrapper::ResolveCorePath(
+        std::string(root_directory.utf8().get_data()), std::string(core_name.utf8().get_data()));
+    if (!std::filesystem::is_regular_file(core_path))
+        return false;
+    void* handle = Xenu::DynLib_Open(core_path.c_str());
+    if (!handle)
+        return false;
+    const bool found = Xenu::DynLib_Sym(handle, symbol.utf8().get_data()) != nullptr;
+    Xenu::DynLib_Close(handle);
+    return found;
+}
+
 int32_t Libretro::RunWiiSystemUpdate(const String& root_directory, const String& core_name,
                                      const String& user_dir, const String& sys_dir,
                                      const String& region, const Callable& progress)
@@ -724,6 +738,8 @@ void Libretro::_bind_methods()
     ClassDB::bind_method(D_METHOD("IsMicrophoneActive"), &Libretro::IsMicrophoneActive);
     ClassDB::bind_static_method("Libretro", D_METHOD("MeasureMicrophoneLevel", "frames", "source_rate", "gain"),
         &Libretro::MeasureMicrophoneLevel, DEFVAL(1.0));
+    ClassDB::bind_static_method("Libretro",
+        D_METHOD("CoreHasExport", "root_directory", "core_name", "symbol"), &Libretro::CoreHasExport);
     ClassDB::bind_static_method("Libretro",
         D_METHOD("RunWiiSystemUpdate", "root_directory", "core_name", "user_dir", "sys_dir", "region", "progress"),
         &Libretro::RunWiiSystemUpdate);
