@@ -828,6 +828,7 @@ public:
     // Emulation-thread-only rollback bookkeeping (no lock needed):
     std::map<int64_t, NpFrame> m_np_used;   // inputs each executed frame actually ran with
     std::deque<RollbackState> m_np_states;            // core + frontend input state before frame N
+    bool m_np_await_anchor = false;                   // no state yet: run confirmed frames only
     std::map<int64_t, uint32_t> m_np_crc_pending;           // captured CRCs awaiting confirmation
     int64_t m_np_watermark = -1;                            // highest contiguous confirmed frame
     int64_t m_np_verified = -1;                             // highest frame verified/corrected against confirmations

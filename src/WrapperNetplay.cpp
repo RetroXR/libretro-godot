@@ -362,6 +362,7 @@ bool Wrapper::SaveRollbackState(int64_t frame)
     m_np_serialize_n.fetch_add(1, std::memory_order_relaxed);
     if (!ser_ok)
         return false;
+    m_np_await_anchor = false;
     m_np_states.push_back(RollbackState{
         frame,
         std::move(buffer),
@@ -656,7 +657,8 @@ void Wrapper::NetplayRollbackIteration(double frame_duration_ms, double& accumul
         {
             while (m_np_inputs.count(m_np_watermark + 1))
                 ++m_np_watermark;
-            const bool speculation_ok = frame <= m_np_watermark + m_np_max_ahead;
+            const bool speculation_ok = frame <= m_np_watermark
+                + (m_np_await_anchor ? 0 : m_np_max_ahead);
             const bool disc_due = !m_disc_schedule.empty() && m_disc_schedule.begin()->first <= frame;
             const bool reset_due = !m_reset_schedule.empty() && *m_reset_schedule.begin() <= frame;
             // Disc state lives partly outside retro_serialize. Do not cross a
@@ -694,8 +696,26 @@ void Wrapper::NetplayRollbackIteration(double frame_duration_ms, double& accumul
     const uint32_t local_mask = ApplyScheduledNetplayLocalMask(frame) & mask;
     if (!SaveRollbackState(frame))
     {
-        FailNetplayRollback("core failed to serialize frame " + std::to_string(frame));
-        return;
+        // A core can have nothing to serialize before its first retro_run
+        // (mupen64plus-next: the machine lives in a coroutine that the first
+        // frame starts). With no anchor behind it a frame cannot be rewound,
+        // so run it only once its inputs are CONFIRMED -- a confirmed frame is
+        // never rolled back -- and speculate again from the first state.
+        if (!m_np_states.empty())
+        {
+            FailNetplayRollback("core failed to serialize frame " + std::to_string(frame));
+            return;
+        }
+        bool confirmed;
+        {
+            std::lock_guard<std::mutex> lock(m_np_mutex);
+            confirmed = frame <= m_np_watermark;
+        }
+        if (!confirmed)
+        {
+            m_np_await_anchor = true;
+            return;
+        }
     }
 
     // 4. Build this frame's inputs: live local, confirmed remote if already
