@@ -127,6 +127,7 @@ bool OptionsHandler::SetVariables(const retro_variable* variables)
     }
 
     DeserializeFromFile();
+    ReapplyFrontendValues();
 
     return true;
 }
@@ -175,6 +176,7 @@ bool OptionsHandler::SetCoreOptions(const retro_core_option_definition* definiti
     }
 
     DeserializeFromFile();
+    ReapplyFrontendValues();
 
     return true;
 }
@@ -233,6 +235,7 @@ bool OptionsHandler::SetCoreOptionsV2(const retro_core_options_v2* options)
     }
 
     DeserializeFromFile();
+    ReapplyFrontendValues();
 
     return true;
 }
@@ -258,12 +261,13 @@ void OptionsHandler::SetVariable(const std::string& key, const std::string& valu
 {
     if (key.empty())   { LogError("SetVariable: key is empty");   return; }
     if (value.empty()) { LogError("SetVariable: value is empty (key " + key + ")"); return; }
+    m_frontend_values[key] = value;
     if (!m_variables.contains(key))
     {
         // Not an error: a frontend-side key the core never declared (a PS2 card
-        // slot before the core scanned its directory, say) lands here, and
-        // dropping it silently is exactly the trap worth a line.
-        LogWarning("SetVariable: core never declared '" + key + "', value '" + value + "' dropped");
+        // slot before the core scanned its directory, say) lands here. It is
+        // kept, and applied if a later declaration names it.
+        LogWarning("SetVariable: core has not declared '" + key + "', value '" + value + "' held");
         return;
     }
 
@@ -271,6 +275,25 @@ void OptionsHandler::SetVariable(const std::string& key, const std::string& valu
     m_variables[key] = value;
     m_variable_update = true;
     SerializeToFile();
+}
+
+void OptionsHandler::ReapplyFrontendValues()
+{
+    bool applied = false;
+    for (const auto& [key, value] : m_frontend_values)
+    {
+        auto it = m_variables.find(key);
+        if (it == m_variables.end() || it->second == value)
+            continue;
+        Log("SetVariable: " + key + " = " + value + " (held, now declared)");
+        it->second = value;
+        applied = true;
+    }
+    if (applied)
+    {
+        m_variable_update = true;
+        SerializeToFile();
+    }
 }
 
 void OptionsHandler::SerializeToFile()

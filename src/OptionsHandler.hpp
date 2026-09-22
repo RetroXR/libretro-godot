@@ -72,6 +72,13 @@ private:
 
     void SerializeToFile();
     void DeserializeFromFile();
+    void ReapplyFrontendValues();
+
+    // Every value the frontend has set, declared or not. A core may declare its
+    // options more than once, and only while loading the game (fbneo builds its
+    // list per game inside retro_load_game and reads it straight away); each
+    // declaration clears m_variables, so these are laid back on top of it.
+    std::unordered_map<std::string, std::string> m_frontend_values;
     std::string ResolvePersistencePath() const;
 };
 }
