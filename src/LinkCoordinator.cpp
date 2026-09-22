@@ -292,15 +292,52 @@ void LinkCoordinator::LogBusesLocked(const char* why) const
 
 void LinkCoordinator::RebuildBuses()
 {
-    // Everything currently on a bus comes off it first. Anything that is still
-    // joined to something will be put back below, and anything that is not has
-    // just had its cable pulled and should look like it.
+    // Everything comes off first. Anything that is still joined to something
+    // will be put back below, and anything that is not has just had its cable
+    // pulled and should look like it.
+    //
+    // Two refinements, both about WHO re-anchors:
+    //
+    // A LOOSE endpoint re-anchors too. A machine running with no cable still
+    // publishes, so it holds an origin from the first time it ever called in;
+    // left alone, a cable joined later measured it from there, and the unit
+    // switched on first looked as far ahead on the wire as it had been running
+    // alone -- then stood still for that long waiting for the other to catch
+    // up. Found by a netplay session powering two Lynxes on seven frames apart
+    // and cabling them after.
+    //
+    // A bus whose members did not change keeps everything: its clocks, its
+    // queued bytes, its topology generation. It used to be torn down and
+    // re-anchored whenever ANY cable in the room moved, which moved every other
+    // wire's origin to wherever each of its machines next happened to call in.
+    // Harmless to a room, fatal to netplay: a lead plugged into two machines
+    // nobody is playing shifted a live session's clocks on one peer only.
+    struct Kept
+    {
+        std::vector<Endpoint*> members;
+        bool published = false;
+        uint64_t origin = 0;
+        uint64_t local_delta = 0;
+        uint64_t safe_delta = 0;
+        uint64_t topology_generation = 0;
+        std::deque<Message> inbox;
+    };
+    std::vector<std::pair<Endpoint*, Kept>> kept;
     for (auto& ep : m_endpoints)
     {
         if (ep->bus)
         {
-            Detached(*ep);
+            Kept k;
+            k.members = ep->bus->members;
+            k.published = ep->published;
+            k.origin = ep->origin;
+            k.local_delta = ep->local_delta;
+            k.safe_delta = ep->safe_delta;
+            k.topology_generation = ep->topology_generation;
+            k.inbox = std::move(ep->inbox);
+            kept.emplace_back(ep.get(), std::move(k));
         }
+        Detached(*ep);
     }
     m_buses.clear();
 
@@ -389,9 +426,24 @@ void LinkCoordinator::RebuildBuses()
         bus.cv_slot = m_buses.size() - 1;
         for (size_t i = 0; i < bus.members.size(); ++i)
         {
-            bus.members[i]->bus = &bus;
-            bus.members[i]->index = static_cast<int>(i);
-			++bus.members[i]->topology_generation;
+            Endpoint* member = bus.members[i];
+            member->bus = &bus;
+            member->index = static_cast<int>(i);
+            auto was = std::find_if(kept.begin(), kept.end(),
+                                    [member](const auto& k) { return k.first == member; });
+            if (was != kept.end() && was->second.members == bus.members)
+            {
+                // The same wire as before, in the same order: nothing moved.
+                Kept& k = was->second;
+                member->published = k.published;
+                member->origin = k.origin;
+                member->local_delta = k.local_delta;
+                member->safe_delta = k.safe_delta;
+                member->topology_generation = k.topology_generation;
+                member->inbox = std::move(k.inbox);
+                continue;
+            }
+			++member->topology_generation;
         }
     }
 

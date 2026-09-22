@@ -435,6 +435,23 @@ uint32_t Wrapper::ApplyScheduledNetplayLocalMask(int64_t frame)
 bool Wrapper::NetplayRollbackReplay(int64_t to_frame, uint32_t mask)
 {
     const auto rb_t0 = std::chrono::steady_clock::now();
+    if (!RollbackRestoreAnchor(to_frame))
+        return false;
+    const int64_t current = m_frame_counter.load(std::memory_order_relaxed);
+    for (int64_t x = to_frame; x < current; ++x)
+    {
+        if (!RollbackReplayFrame(x, current, mask))
+            return false;
+    }
+    RollbackFinishReplay(to_frame, current, rb_t0);
+    return true;
+}
+
+/// First third of a rewind: put this core back at the start of `to_frame`, and
+/// forget everything the mispredicted timeline produced after it. The frame
+/// counter is left where it was; the replay walks back up to it.
+bool Wrapper::RollbackRestoreAnchor(int64_t to_frame)
+{
     auto state_it = std::find_if(m_np_states.begin(), m_np_states.end(),
         [&](const auto& s) { return s.frame == to_frame; });
     if (state_it == m_np_states.end())
@@ -448,71 +465,79 @@ bool Wrapper::NetplayRollbackReplay(int64_t to_frame, uint32_t mask)
         return false;
     }
     m_input_handler->RestoreNetplayState(state_it->input);
-    const int64_t current = m_frame_counter.load(std::memory_order_relaxed);
 
     // Drop everything the rewind invalidated: states after the anchor and CRCs
     // captured on the mispredicted timeline.
     m_np_states.erase(std::next(state_it), m_np_states.end());
     m_np_crc_pending.erase(m_np_crc_pending.upper_bound(to_frame), m_np_crc_pending.end());
-
     m_np_replaying = true;
-    for (int64_t x = to_frame; x < current; ++x)
+    return true;
+}
+
+/// Re-run frame `x` of a replay that ends at `current` with the inputs it
+/// should have had. One frame at a time so a group of cabled cores can stop
+/// together at every edge (see NetplayGroupIteration).
+bool Wrapper::RollbackReplayFrame(int64_t x, int64_t current, uint32_t mask)
+{
+    NpFrame inputs{};
     {
-        NpFrame inputs{};
+        std::lock_guard<std::mutex> lock(m_np_mutex);
+        const uint32_t local_mask = NetplayLocalMaskForFrameLocked(x) & mask;
+        auto confirmed = m_np_inputs.find(x);
+        auto& prev_used = m_np_used;
+        for (uint32_t port = 0; port < 4; ++port)
         {
-            std::lock_guard<std::mutex> lock(m_np_mutex);
-            const uint32_t local_mask = NetplayLocalMaskForFrameLocked(x) & mask;
-            auto confirmed = m_np_inputs.find(x);
-            auto& prev_used = m_np_used;
-            for (uint32_t port = 0; port < 4; ++port)
+            if (!(mask & (1u << port)))
+                continue;
+            int32_t* dst = inputs.data() + port * 5;
+            if (local_mask & (1u << port))
             {
-                if (!(mask & (1u << port)))
-                    continue;
-                int32_t* dst = inputs.data() + port * 5;
-                if (local_mask & (1u << port))
-                {
-                    // Local input is ground truth: replay exactly what was pressed.
-                    auto used = prev_used.find(x);
-                    if (used != prev_used.end())
-                        std::copy_n(used->second.data() + port * 5, 5, dst);
-                }
-                else if (confirmed != m_np_inputs.end())
-                {
-                    std::copy_n(confirmed->second.data() + port * 5, 5, dst);
-                }
-                else
-                {
-                    // Beyond the watermark: re-predict by holding the previous
-                    // frame's (now corrected) value.
-                    auto prev = prev_used.find(x - 1);
-                    if (prev != prev_used.end())
-                        std::copy_n(prev->second.data() + port * 5, 5, dst);
-                }
+                // Local input is ground truth: replay exactly what was pressed.
+                auto used = prev_used.find(x);
+                if (used != prev_used.end())
+                    std::copy_n(used->second.data() + port * 5, 5, dst);
             }
-            if (confirmed != m_np_inputs.end())
-                std::copy(confirmed->second.begin() + NP_AUX_OFFSET,
-                          confirmed->second.end(), inputs.begin() + NP_AUX_OFFSET);
+            else if (confirmed != m_np_inputs.end())
+            {
+                std::copy_n(confirmed->second.data() + port * 5, 5, dst);
+            }
+            else
+            {
+                // Beyond the watermark: re-predict by holding the previous
+                // frame's (now corrected) value.
+                auto prev = prev_used.find(x - 1);
+                if (prev != prev_used.end())
+                    std::copy_n(prev->second.data() + port * 5, 5, dst);
+            }
         }
-        m_np_used[x] = inputs;
-        if (!SaveRollbackState(x))   // no-op for the anchor, re-saves the rest
-        {
-            m_np_replaying = false;
-            m_np_replay_mute_video = false;
-            return false;
-        }
-        m_np_replay_mute_video = (x != current - 1);
-        ApplyNetplayInputs(inputs, mask);
-        ApplyNetplayAux(inputs);
-        m_core->retro_run();
-        m_core_ran_frame = true;
-        if (m_np_crc_interval > 0 && (x + 1) % m_np_crc_interval == 0)
-        {
-            bool ok = false;
-            uint32_t crc = ComputeNetplayCrc(ok);
-            if (ok)
-                m_np_crc_pending[x + 1] = crc;
-        }
+        if (confirmed != m_np_inputs.end())
+            std::copy(confirmed->second.begin() + NP_AUX_OFFSET,
+                      confirmed->second.end(), inputs.begin() + NP_AUX_OFFSET);
     }
+    m_np_used[x] = inputs;
+    if (!SaveRollbackState(x))   // no-op for the anchor, re-saves the rest
+    {
+        m_np_replaying = false;
+        m_np_replay_mute_video = false;
+        return false;
+    }
+    m_np_replay_mute_video = (x != current - 1);
+    ApplyNetplayInputs(inputs, mask);
+    ApplyNetplayAux(inputs);
+    RunNetplayFrame(x);
+    if (m_np_crc_interval > 0 && (x + 1) % m_np_crc_interval == 0)
+    {
+        bool ok = false;
+        uint32_t crc = ComputeNetplayCrc(ok);
+        if (ok)
+            m_np_crc_pending[x + 1] = crc;
+    }
+    return true;
+}
+
+void Wrapper::RollbackFinishReplay(int64_t to_frame, int64_t current,
+                                   std::chrono::steady_clock::time_point rb_t0)
+{
     m_np_replaying = false;
     m_np_replay_mute_video = false;
     // Every replayed frame ≤ watermark ran with confirmed inputs.
@@ -530,7 +555,17 @@ bool Wrapper::NetplayRollbackReplay(int64_t to_frame, uint32_t mask)
                                                     std::memory_order_relaxed))
     {
     }
-    return true;
+}
+
+/// retro_run for netplay frame `frame`, unless this machine is not switched on
+/// yet. A held machine still counts the frame, so every member of a session
+/// keeps one frame clock; it just runs nothing on it (see SetNetplayPowerOnFrame).
+void Wrapper::RunNetplayFrame(int64_t frame)
+{
+    if (frame < m_np_power_on_frame.load(std::memory_order_relaxed))
+        return;
+    m_core->retro_run();
+    m_core_ran_frame = true;
 }
 
 /// What rollback costs here. Read by a probe; safe to call at any time.
@@ -714,8 +749,311 @@ void Wrapper::NetplayRollbackIteration(double frame_duration_ms, double& accumul
     ApplyNetplayInputs(inputs, mask);
     ApplyNetplayAux(inputs);
     m_audio_handler->CallAudioBufferStatusCallback();
-    m_core->retro_run();
-    m_core_ran_frame = true;
+    RunNetplayFrame(frame);
+    const int64_t frame_done = m_frame_counter.fetch_add(1, std::memory_order_relaxed) + 1;
+
+    if (m_np_crc_interval > 0 && frame_done % m_np_crc_interval == 0)
+    {
+        bool ok = false;
+        uint32_t crc = ComputeNetplayCrc(ok);
+        if (ok)
+            m_np_crc_pending[frame_done] = crc;
+    }
+    FlushNetplayCrcs();
+}
+
+bool Wrapper::SetNetplayRollbackGroup(std::shared_ptr<NetplayRollbackGroup> group, size_t index)
+{
+    if (m_running && m_thread.joinable())
+    {
+        LogError("SetNetplayRollbackGroup: only before the core starts.");
+        return false;
+    }
+    m_np_group = std::move(group);
+    m_np_group_index = index;
+    return true;
+}
+
+/// Rollback for one machine of a cabled group: NetplayRollbackIteration, with
+/// every decision about the TIMELINE taken for the whole cable at once.
+///
+/// Each member does its own inputs, its own verification and its own core, as
+/// a lone machine does. What changes is that they meet at every frame edge
+/// (NetplayRollbackGroup::Rendezvous) and there:
+///
+///   - the rewind anchor is the EARLIEST mismatch on any member, and every
+///     member rewinds to it. A machine whose own inputs were all right still
+///     heard the other end of the cable say things it will now not say;
+///   - a frame counts as verified only when EVERY member has verified it, for
+///     the same reason, so no CRC leaves for a frame the cable could still undo;
+///   - the frame runs only if every member can run it, so they never drift
+///     apart and the next edge is one instant on the wire again;
+///   - the bus is snapshotted at the start of each frame and restored with the
+///     cores, which is the part a lone rollback has no way to do.
+///
+/// A replay stops at every edge too, capturing the bus again as it goes, so the
+/// ring always describes the timeline the cores are actually on.
+void Wrapper::NetplayGroupIteration(double frame_duration_ms, double& accumulator)
+{
+    NetplayRollbackGroup& group = *m_np_group;
+    const uint32_t mask = m_np_port_mask.load(std::memory_order_relaxed);
+    const int64_t frame = m_frame_counter.load(std::memory_order_relaxed);
+    auto stop = [this] { return m_stop_requested.load(); };
+
+    if (group.IsBroken())
+    {
+        FailNetplayRollback("linked rollback ended: " + group.Reason());
+        return;
+    }
+
+    // Pace BEFORE meeting. The group moves at the pace of its slowest member
+    // anyway; arriving early only parks this thread where it drains nothing.
+    if (accumulator < frame_duration_ms)
+        return;
+
+    // 1. What this member knows: the first contradiction in its own ports, how
+    //    far it has checked, and whether it could run this frame.
+    NetplayRollbackGroup::Proposal mine;
+    mine.frame = frame;
+    {
+        std::lock_guard<std::mutex> lock(m_np_mutex);
+        while (m_np_inputs.count(m_np_watermark + 1))
+            ++m_np_watermark;
+        mine.watermark = m_np_watermark;
+        mine.verified = m_np_verified;
+        const int64_t verify_upto = std::min(m_np_watermark, frame - 1);
+        for (int64_t x = m_np_verified + 1; x <= verify_upto; ++x)
+        {
+            const uint32_t local_mask = NetplayLocalMaskForFrameLocked(x) & mask;
+            auto confirmed = m_np_inputs.find(x);
+            auto used = m_np_used.find(x);
+            if (confirmed == m_np_inputs.end() || used == m_np_used.end())
+            {
+                mine.verified = x;
+                continue;
+            }
+            bool match = true;
+            for (uint32_t port = 0; port < 4 && match; ++port)
+            {
+                if (!(mask & (1u << port)) || (local_mask & (1u << port)))
+                    continue;
+                match = std::equal(confirmed->second.data() + port * 5,
+                                   confirmed->second.data() + port * 5 + 5,
+                                   used->second.data() + port * 5);
+            }
+            if (match)
+                match = std::equal(confirmed->second.begin() + NP_AUX_OFFSET,
+                                   confirmed->second.end(),
+                                   used->second.begin() + NP_AUX_OFFSET);
+            if (!match)
+            {
+                mine.mismatch = x;
+                break;
+            }
+            mine.verified = x;
+        }
+        const bool disc_due = !m_disc_schedule.empty() && m_disc_schedule.begin()->first <= frame;
+        const bool reset_due = !m_reset_schedule.empty() && *m_reset_schedule.begin() <= frame;
+        mine.link_due = !m_link_schedule.empty() && m_link_schedule.begin()->first <= frame;
+        const bool boundary_ok = (!disc_due && !reset_due) || frame <= m_np_watermark;
+        mine.can_run = frame <= m_np_watermark + m_np_max_ahead && boundary_ok;
+    }
+
+    // 2. Meet. Every member hands in its proposal; the last to arrive decides.
+    const bool met = group.Rendezvous(
+        [&]
+        {
+            group.proposals.resize(group.members.size());
+            group.proposals[m_np_group_index] = mine;
+        },
+        [&]
+        {
+            int64_t anchor = -1;
+            int64_t verified = std::numeric_limits<int64_t>::max();
+            bool run = true;
+            bool link_due = false;
+            for (const auto& p : group.proposals)
+            {
+                if (p.frame != frame)
+                {
+                    group.broken = true;
+                    group.reason = "linked machines reached different frames ("
+                        + std::to_string(p.frame) + " and " + std::to_string(frame) + ")";
+                    return;
+                }
+                if (p.mismatch >= 0 && (anchor < 0 || p.mismatch < anchor))
+                    anchor = p.mismatch;
+                verified = std::min(verified, p.verified);
+                run = run && p.can_run;
+                link_due = link_due || p.link_due;
+            }
+            // A cable moves only once every frame BEFORE it is confirmed, so no
+            // rewind ever reaches back across it: verification has reached
+            // frame-1 by now, and any anchor it found is taken first. A rewind
+            // TO this frame is fine -- the snapshot below is taken after the
+            // cable moved. (Not "this frame confirmed": a player's own input for
+            // a frame only exists once that frame has run.)
+            if (link_due)
+            {
+                for (const auto& p : group.proposals)
+                    run = run && frame <= p.watermark + 1;
+            }
+            if (anchor >= 0)
+                verified = std::min(verified, anchor - 1);
+            group.anchor = anchor;
+            group.verified = verified;
+            group.run = run && anchor < 0;
+            if (anchor >= 0)
+            {
+                if (!group.RestoreLocked(anchor))
+                {
+                    group.broken = true;
+                    group.reason = "no bus snapshot for frame " + std::to_string(anchor);
+                }
+            }
+            else if (run)
+            {
+                for (Wrapper* member : group.members)
+                {
+                    // One that arrives after its frame has gone lands on
+                    // whatever frame each peer happens to be at. Refuse it
+                    // rather than play on from different cables.
+                    std::lock_guard<std::mutex> lock(member->m_np_mutex);
+                    if (!member->m_link_schedule.empty()
+                        && member->m_link_schedule.begin()->first < frame)
+                    {
+                        group.broken = true;
+                        group.reason = "a cable change for frame "
+                            + std::to_string(member->m_link_schedule.begin()->first)
+                            + " arrived after it (at " + std::to_string(frame) + ")";
+                        return;
+                    }
+                }
+                for (Wrapper* member : group.members)
+                    member->ApplyScheduledLinkOps(frame);
+                group.CaptureLocked(frame);
+            }
+        },
+        stop);
+    if (!met)
+    {
+        if (!m_stop_requested.load())
+            FailNetplayRollback("linked rollback ended: " + group.Reason());
+        return;
+    }
+    // Read before this member can arrive again: nobody decides the next edge
+    // until every member, this one included, is back at it.
+    const int64_t anchor = group.anchor;
+    const int64_t verified = group.verified;
+    const bool run = group.run;
+    m_np_verified = std::max(m_np_verified, verified);
+
+    // 3. A rewind: every member back to the anchor (the bus already is), then
+    //    forward again together, one frame and one edge at a time.
+    if (anchor >= 0)
+    {
+        const auto rb_t0 = std::chrono::steady_clock::now();
+        if (m_np_group_index == 0)
+            Log("Linked rollback: " + std::to_string(group.members.size()) + " machines back to frame "
+                + std::to_string(anchor) + " from " + std::to_string(frame));
+        if (!RollbackRestoreAnchor(anchor))
+        {
+            group.Break("frame " + std::to_string(anchor) + " could not be restored");
+            FailNetplayRollback("failed to restore frame " + std::to_string(anchor));
+            return;
+        }
+        for (int64_t x = anchor; x < frame; ++x)
+        {
+            if (!RollbackReplayFrame(x, frame, mask))
+            {
+                group.Break("frame " + std::to_string(x) + " could not be replayed");
+                FailNetplayRollback("failed to replay frame " + std::to_string(x));
+                return;
+            }
+            if (!group.Rendezvous([&] { group.CaptureLocked(x + 1); }, stop))
+            {
+                m_np_replaying = false;
+                m_np_replay_mute_video = false;
+                if (!m_stop_requested.load())
+                    FailNetplayRollback("linked rollback ended: " + group.Reason());
+                return;
+            }
+        }
+        RollbackFinishReplay(anchor, frame, rb_t0);
+        // Verified for the GROUP, not by this member's watermark alone: the
+        // next edge re-checks the replayed frames against what is confirmed.
+        m_np_verified = anchor - 1;
+        FlushNetplayCrcs();
+        return;
+    }
+
+    if (!run)
+    {
+        std::unique_lock<std::mutex> lock(m_np_mutex);
+        m_np_cv.wait_for(lock, std::chrono::milliseconds(2));
+        return;
+    }
+
+    // 4. Run the frame, exactly as a lone machine does.
+    if (accumulator > frame_duration_ms * 4.0)
+        accumulator = frame_duration_ms * 4.0;
+    accumulator -= frame_duration_ms;
+
+    ApplyScheduledDiscOps(frame);
+    ApplyScheduledResets(frame);
+    const uint32_t local_mask = ApplyScheduledNetplayLocalMask(frame) & mask;
+    if (!SaveRollbackState(frame))
+    {
+        group.Break("a linked core failed to serialize");
+        FailNetplayRollback("core failed to serialize frame " + std::to_string(frame));
+        return;
+    }
+
+    NpFrame inputs{};
+    {
+        std::lock_guard<std::mutex> lock(m_np_mutex);
+        auto confirmed = m_np_inputs.find(frame);
+        for (uint32_t port = 0; port < 4; ++port)
+        {
+            if (!(mask & (1u << port)))
+                continue;
+            int32_t* dst = inputs.data() + port * 5;
+            if (local_mask & (1u << port))
+            {
+                std::copy_n(m_np_live_local.data() + port * 5, 5, dst);
+                m_np_local_records.push_back(static_cast<int32_t>(frame));
+                m_np_local_records.push_back(static_cast<int32_t>(port));
+                for (int i = 0; i < 5; ++i)
+                    m_np_local_records.push_back(dst[i]);
+                if ((m_input_handler->GetPortDevice(port) & RETRO_DEVICE_MASK) == RETRO_DEVICE_MOUSE)
+                {
+                    m_np_live_local[port * 5 + 1] = 0;
+                    m_np_live_local[port * 5 + 2] = 0;
+                }
+            }
+            else if (confirmed != m_np_inputs.end())
+            {
+                std::copy_n(confirmed->second.data() + port * 5, 5, dst);
+            }
+            else
+            {
+                auto prev = m_np_used.find(frame - 1);
+                if (prev != m_np_used.end())
+                    std::copy_n(prev->second.data() + port * 5, 5, dst);
+            }
+        }
+        if (confirmed != m_np_inputs.end())
+            std::copy(confirmed->second.begin() + NP_AUX_OFFSET,
+                      confirmed->second.end(), inputs.begin() + NP_AUX_OFFSET);
+        m_np_inputs.erase(m_np_inputs.begin(), m_np_inputs.lower_bound(m_np_verified - NP_ROLLBACK_HISTORY));
+    }
+    m_np_used[frame] = inputs;
+    m_np_used.erase(m_np_used.begin(), m_np_used.lower_bound(m_np_verified - NP_ROLLBACK_HISTORY));
+
+    ApplyNetplayInputs(inputs, mask);
+    ApplyNetplayAux(inputs);
+    m_audio_handler->CallAudioBufferStatusCallback();
+    RunNetplayFrame(frame);
     const int64_t frame_done = m_frame_counter.fetch_add(1, std::memory_order_relaxed) + 1;
 
     if (m_np_crc_interval > 0 && frame_done % m_np_crc_interval == 0)

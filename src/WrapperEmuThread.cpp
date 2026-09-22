@@ -38,6 +38,10 @@ void Wrapper::StopEmulationThread(bool blocking)
 
     m_stop_requested = true;
     m_running = false;
+    // A cabled rollback group stops at every frame edge for all of its members;
+    // one that has gone must let the others out rather than hold them there.
+    if (m_np_group)
+        m_np_group->Break("a linked machine stopped");
     m_condition_variable.notify_all(); // wake emulation thread if blocked on InitAudio CV wait
     m_np_cv.notify_all();              // wake emulation thread if blocked on the netplay input gate
     // Same reason: an emulation thread parked on the link barrier is waiting
@@ -746,7 +750,12 @@ void Wrapper::EmulationThreadLoop()
         // ── Netplay rollback: run ahead on prediction, rewind on correction ──
         if (m_np_rollback.load(std::memory_order_acquire))
         {
-            NetplayRollbackIteration(frame_duration_ms, accumulator);
+            // A machine on a cable rewinds with every other machine on it, or
+            // not at all: see NetplayGroupIteration.
+            if (m_np_group)
+                NetplayGroupIteration(frame_duration_ms, accumulator);
+            else
+                NetplayRollbackIteration(frame_duration_ms, accumulator);
             continue;
         }
 
@@ -785,8 +794,7 @@ void Wrapper::EmulationThreadLoop()
         ApplyNetplayAux(frame_inputs);
 
         m_audio_handler->CallAudioBufferStatusCallback();
-        m_core->retro_run();
-        m_core_ran_frame = true;
+        RunNetplayFrame(m_frame_counter.load(std::memory_order_relaxed));
         int64_t frame_done = m_frame_counter.fetch_add(1, std::memory_order_relaxed) + 1;
         accumulator -= frame_duration_ms;
 

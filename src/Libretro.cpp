@@ -304,6 +304,49 @@ void Libretro::SetNetplayRollback(bool enabled, int local_mask, int max_ahead)
     m_wrapper->SetNetplayRollback(enabled, static_cast<uint32_t>(local_mask), max_ahead);
 }
 
+bool Libretro::SetNetplayRollbackGroup(const godot::Array& others,
+                                       const godot::PackedInt32Array& ports)
+{
+    if (!m_wrapper || others.is_empty() || ports.size() != others.size() + 1)
+        return false;
+    std::vector<Libretro*> nodes{this};
+    for (int i = 0; i < others.size(); ++i)
+    {
+        Libretro* other = godot::Object::cast_to<Libretro>(others[i]);
+        if (!other || !other->m_wrapper || std::find(nodes.begin(), nodes.end(), other) != nodes.end())
+            return false;
+        nodes.push_back(other);
+    }
+    auto group = std::make_shared<NetplayRollbackGroup>();
+    for (size_t i = 0; i < nodes.size(); ++i)
+    {
+        group->members.push_back(nodes[i]->m_wrapper.get());
+        group->ports.emplace_back(nodes[i]->m_wrapper.get(), static_cast<unsigned>(ports[static_cast<int>(i)]));
+    }
+    for (size_t i = 0; i < nodes.size(); ++i)
+    {
+        if (!nodes[i]->m_wrapper->SetNetplayRollbackGroup(group, i))
+        {
+            for (Libretro* node : nodes)
+                node->m_wrapper->SetNetplayRollbackGroup(nullptr, 0);
+            return false;
+        }
+    }
+    return true;
+}
+
+void Libretro::ClearNetplayRollbackGroup()
+{
+    if (m_wrapper)
+        m_wrapper->SetNetplayRollbackGroup(nullptr, 0);
+}
+
+void Libretro::SetNetplayPowerOnFrame(int64_t frame)
+{
+    if (m_wrapper)
+        m_wrapper->SetNetplayPowerOnFrame(frame);
+}
+
 bool Libretro::ScheduleNetplayLocalMask(int64_t frame, int local_mask)
 {
     return m_wrapper->ScheduleNetplayLocalMask(frame, static_cast<uint32_t>(local_mask));
@@ -746,6 +789,9 @@ void Libretro::_bind_methods()
     ClassDB::bind_method(D_METHOD("SetNetplayMode", "enabled", "port_mask", "start_frame"), &Libretro::SetNetplayMode);
     ClassDB::bind_method(D_METHOD("PostNetplayInputs", "frame", "inputs"), &Libretro::PostNetplayInputs);
     ClassDB::bind_method(D_METHOD("SetNetplayRollback", "enabled", "local_mask", "max_ahead"), &Libretro::SetNetplayRollback);
+    ClassDB::bind_method(D_METHOD("SetNetplayRollbackGroup", "others", "ports"), &Libretro::SetNetplayRollbackGroup);
+    ClassDB::bind_method(D_METHOD("ClearNetplayRollbackGroup"), &Libretro::ClearNetplayRollbackGroup);
+    ClassDB::bind_method(D_METHOD("SetNetplayPowerOnFrame", "frame"), &Libretro::SetNetplayPowerOnFrame);
     ClassDB::bind_method(D_METHOD("ScheduleNetplayLocalMask", "frame", "local_mask"), &Libretro::ScheduleNetplayLocalMask);
     ClassDB::bind_method(D_METHOD("TakeNetplayLocalRecords"), &Libretro::TakeNetplayLocalRecords);
     ClassDB::bind_method(D_METHOD("RequestSaveState"), &Libretro::RequestSaveState);

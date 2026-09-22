@@ -10,6 +10,9 @@
 #include <godot_cpp/classes/input_event_key.hpp>
 
 #include <algorithm>
+#include <chrono>
+#include <limits>
+#include <memory>
 #include <thread>
 #include <mutex>
 #include <condition_variable>
@@ -40,6 +43,7 @@
 #include "MessageHandler.hpp"
 #include "LogHandler.hpp"
 #include "MicrophoneHandler.hpp"
+#include "NetplayGroup.hpp"
 
 namespace Xenu
 {
@@ -222,6 +226,22 @@ public:
     /// rollback remains active without changing ownership at different times
     /// on different peers.
     bool ScheduleNetplayLocalMask(int64_t frame, uint32_t local_mask);
+
+    /// Put this machine in a cabled rollback group (see NetplayGroup.hpp), or
+    /// take it out with null. Only while the emulation thread is not running:
+    /// the thread reads the pointer every frame without a lock.
+    bool SetNetplayRollbackGroup(std::shared_ptr<NetplayRollbackGroup> group, size_t index);
+
+    /// The netplay frame this machine is switched on at. Before it the frame
+    /// counts but the core does not run, which is how a session powers cabled
+    /// handhelds on a few frames apart -- every peer on the same frames -- the
+    /// way players in a room do without thinking about it. Two identical units
+    /// switched on in the same instant transmit on identical ticks and collide
+    /// on every byte (docs/dev/lynx-link.md).
+    void SetNetplayPowerOnFrame(int64_t frame)
+    {
+        m_np_power_on_frame.store(frame, std::memory_order_relaxed);
+    }
 
     /// Drain the per-frame local-input records the emulation thread produced:
     /// flat groups of 7 ints {frame, port, buttons, alx, aly, arx, ary}. These
@@ -539,6 +559,13 @@ public:
     // Emulation-thread internals (rollback engine).
     void NetplayRollbackIteration(double frame_duration_ms, double& accumulator);
     bool NetplayRollbackReplay(int64_t to_frame, uint32_t mask);
+    bool RollbackRestoreAnchor(int64_t to_frame);
+    bool RollbackReplayFrame(int64_t x, int64_t current, uint32_t mask);
+    void RollbackFinishReplay(int64_t to_frame, int64_t current,
+                              std::chrono::steady_clock::time_point rb_t0);
+    void RunNetplayFrame(int64_t frame);
+    /// Rollback for a machine in a cabled group. See NetplayGroup.hpp.
+    void NetplayGroupIteration(double frame_duration_ms, double& accumulator);
     uint32_t NetplayLocalMaskForFrameLocked(int64_t frame) const;
     uint32_t ApplyScheduledNetplayLocalMask(int64_t frame);
     bool SaveRollbackState(int64_t frame);
@@ -778,6 +805,9 @@ public:
 
     // Rollback state. Everything below m_np_mutex-guarded unless noted.
     std::atomic<bool> m_np_rollback = false;
+    std::shared_ptr<NetplayRollbackGroup> m_np_group;
+    size_t m_np_group_index = 0;
+    std::atomic<int64_t> m_np_power_on_frame = std::numeric_limits<int64_t>::min();
     std::atomic<uint32_t> m_np_local_mask = 0;
     uint32_t m_np_initial_local_mask = 0;
     /// Frame -> complete local ownership mask from that frame onward. Kept for

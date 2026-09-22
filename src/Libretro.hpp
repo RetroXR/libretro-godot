@@ -360,6 +360,14 @@ public:
     /// (local_mask) apply live with zero delay, remote ports are predicted and
     /// corrected via invisible rewind+replay. max_ahead caps speculation.
     void SetNetplayRollback(bool enabled, int local_mask, int max_ahead);
+    /// Make this machine and `others` one cabled rollback group, rewinding
+    /// together (Wrapper::NetplayGroupIteration). `ports` is each machine's bus
+    /// port, this one first. Call on every member's behalf once, before any of
+    /// them starts; ClearNetplayRollbackGroup undoes it for one machine.
+    bool SetNetplayRollbackGroup(const godot::Array& others, const godot::PackedInt32Array& ports);
+    void ClearNetplayRollbackGroup();
+    /// The netplay frame this machine is switched on at (see Wrapper).
+    void SetNetplayPowerOnFrame(int64_t frame);
     bool ScheduleNetplayLocalMask(int64_t frame, int local_mask);
 
     /// Drain per-frame local-input records: flat groups of 7 ints
