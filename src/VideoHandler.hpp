@@ -65,7 +65,7 @@ public:
     void UpdateTexture(godot::PackedByteArray pixel_data, int32_t width, int32_t height, bool flip_y);
 
     bool SetRotation(uint32_t rotation);
-    bool GetOverscan(int32_t* overscan);
+    bool GetOverscan(bool* overscan);
     bool GetCanDupe(bool* can_dupe);
     bool SetPixelFormat(const retro_pixel_format* pixel_format);
     bool SetGeometry(const retro_game_geometry* geometry);

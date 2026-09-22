@@ -265,7 +265,7 @@ bool EnvironmentHandler::Callback(uint32_t cmd, void* data)
     switch (cmd)
     {
     case RETRO_ENVIRONMENT_SET_ROTATION:                                        return data && instance->m_video_handler->SetRotation(*static_cast<uint32_t*>(data));
-    case RETRO_ENVIRONMENT_GET_OVERSCAN:                                        return instance->m_video_handler->GetOverscan(static_cast<int32_t*>(data));
+    case RETRO_ENVIRONMENT_GET_OVERSCAN:                                        return instance->m_video_handler->GetOverscan(static_cast<bool*>(data));
     case RETRO_ENVIRONMENT_GET_CAN_DUPE:                                        return instance->m_video_handler->GetCanDupe(static_cast<bool*>(data));
     case RETRO_ENVIRONMENT_SET_MESSAGE:                                         return instance->m_message_handler->SetMessage(static_cast<const retro_message*>(data));
     case RETRO_ENVIRONMENT_SHUTDOWN:                                            return instance->Shutdown();

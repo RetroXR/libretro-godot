@@ -684,7 +684,7 @@ bool VideoHandler::SetRotation(uint32_t rotation)
     return true;
 }
 
-bool VideoHandler::GetOverscan(int32_t* overscan)
+bool VideoHandler::GetOverscan(bool* overscan)
 {
     if (!overscan)
     {
@@ -692,7 +692,10 @@ bool VideoHandler::GetOverscan(int32_t* overscan)
         return false;
     }
 
-    *overscan = 0;
+    // bool, as libretro.h declares it: writing an int32 here zeroed the three
+    // bytes after a core's flag -- in Beetle Lynx the low byte of its
+    // input_state_cb, which became the poll callback and read every button as 0.
+    *overscan = false;
     return true;
 }
 
