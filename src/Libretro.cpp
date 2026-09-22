@@ -6,7 +6,9 @@
 #include "CoreOptionsPeek.hpp"
 #include "RetroAchievements.hpp"
 #include "MicrophoneLevel.hpp"
+#include "DynLib.hpp"
 
+#include <cstdio>
 #include <filesystem>
 #include <utility>
 #include <vector>
@@ -548,6 +550,53 @@ void Libretro::NotifyContentLoadFailed(const String& reason)
     call_deferred("emit_signal", "content_load_failed", reason);
 }
 
+namespace
+{
+typedef int (*WiiUpdateProgress)(void* userdata, size_t processed, size_t total, uint64_t title_id);
+typedef int (*WiiSystemUpdate)(const char* user_dir, const char* sys_dir, const char* region,
+                               WiiUpdateProgress progress, void* userdata);
+
+int WiiUpdateProgressTrampoline(void* userdata, size_t processed, size_t total, uint64_t title_id)
+{
+    const Callable& progress = *static_cast<const Callable*>(userdata);
+    if (!progress.is_valid())
+        return 1;
+    char title_hex[17];
+    std::snprintf(title_hex, sizeof(title_hex), "%016llx", static_cast<unsigned long long>(title_id));
+    const Variant keep_going = progress.call(static_cast<int64_t>(processed), static_cast<int64_t>(total),
+                                             String(title_hex));
+    // Anything but an explicit false carries on: a callback that returns nothing
+    // must not cancel the install.
+    return keep_going.get_type() == Variant::BOOL && !static_cast<bool>(keep_going) ? 0 : 1;
+}
+}
+
+int32_t Libretro::RunWiiSystemUpdate(const String& root_directory, const String& core_name,
+                                     const String& user_dir, const String& sys_dir,
+                                     const String& region, const Callable& progress)
+{
+    const std::string core_path = Wrapper::ResolveCorePath(
+        std::string(root_directory.utf8().get_data()), std::string(core_name.utf8().get_data()));
+    void* handle = Xenu::DynLib_Open(core_path.c_str());
+    if (!handle)
+    {
+        LogError("Wii system update: cannot open core " + core_path);
+        return -1;
+    }
+    auto update = reinterpret_cast<WiiSystemUpdate>(Xenu::DynLib_Sym(handle, "retroxr_wii_system_update"));
+    if (!update)
+    {
+        LogError("Wii system update: " + core_path + " has no retroxr_wii_system_update (core too old)");
+        Xenu::DynLib_Close(handle);
+        return -2;
+    }
+    const int result = update(user_dir.utf8().get_data(), sys_dir.utf8().get_data(),
+                              region.utf8().get_data(), &WiiUpdateProgressTrampoline,
+                              const_cast<Callable*>(&progress));
+    Xenu::DynLib_Close(handle);
+    return result;
+}
+
 Dictionary Libretro::PeekCoreOptions(const String& root_directory, const String& core_name)
 {
     Dictionary result;
@@ -675,6 +724,9 @@ void Libretro::_bind_methods()
     ClassDB::bind_method(D_METHOD("IsMicrophoneActive"), &Libretro::IsMicrophoneActive);
     ClassDB::bind_static_method("Libretro", D_METHOD("MeasureMicrophoneLevel", "frames", "source_rate", "gain"),
         &Libretro::MeasureMicrophoneLevel, DEFVAL(1.0));
+    ClassDB::bind_static_method("Libretro",
+        D_METHOD("RunWiiSystemUpdate", "root_directory", "core_name", "user_dir", "sys_dir", "region", "progress"),
+        &Libretro::RunWiiSystemUpdate);
     ClassDB::bind_method(D_METHOD("SetNetplayMode", "enabled", "port_mask", "start_frame"), &Libretro::SetNetplayMode);
     ClassDB::bind_method(D_METHOD("PostNetplayInputs", "frame", "inputs"), &Libretro::PostNetplayInputs);
     ClassDB::bind_method(D_METHOD("SetNetplayRollback", "enabled", "local_mask", "max_ahead"), &Libretro::SetNetplayRollback);

@@ -326,6 +326,19 @@ public:
     static godot::Vector2 MeasureMicrophoneLevel(const godot::PackedVector2Array& frames,
                                                  double source_rate, double gain = 1.0);
 
+    /// Install the Wii System Menu into a Dolphin NAND through the core's own
+    /// online system update (the fork's `retroxr_wii_system_update` export), so
+    /// the Wii common key the install decrypts with stays inside Dolphin.
+    /// BLOCKING for minutes: call it from a worker thread. `progress` is called
+    /// on that thread as (processed, total, title_id_hex) and returns false to
+    /// cancel once the current title is in. Returns Dolphin's
+    /// WiiUtils::UpdateResult (0 installed, 1 already up to date), or -1 when
+    /// the core cannot be opened and -2 when it is too old to have the export.
+    /// Opens the core in place, like PeekCoreOptions.
+    static int32_t RunWiiSystemUpdate(const godot::String& root_directory, const godot::String& core_name,
+                                      const godot::String& user_dir, const godot::String& sys_dir,
+                                      const godot::String& region, const godot::Callable& progress);
+
     // ── Netplay (deterministic lockstep) ─────────────────────────────────────
     /// Gate the emulation loop: frame N runs only once PostNetplayInputs(N,…)
     /// arrived. port_mask selects participating ports; start_frame resets the
