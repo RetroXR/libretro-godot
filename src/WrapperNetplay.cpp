@@ -627,8 +627,14 @@ void Wrapper::NetplayRollbackIteration(double frame_duration_ms, double& accumul
             // Disc state lives partly outside retro_serialize. Do not cross a
             // scheduled swap or reset speculatively: wait until this frame is
             // confirmed, apply it once, and it can never sit behind a later
-            // rollback anchor.
-            const bool boundary_ok = (!disc_due && !reset_due) || frame <= m_np_watermark;
+            // rollback anchor. Confirmed is not enough: every frame before it
+            // must also have been VERIFIED (step 1). Confirmations arriving
+            // during this wait advance the watermark here, and running the op
+            // then would leave a misprediction just before it to be found
+            // after -- a rewind to behind the op that the replay never
+            // re-applies (a swiped e-Reader card simply vanished).
+            const bool boundary_ok = (!disc_due && !reset_due)
+                || (frame <= m_np_watermark && m_np_verified + 1 >= frame);
             return m_stop_requested.load() || (speculation_ok && boundary_ok);
         };
         if (!can_run())
