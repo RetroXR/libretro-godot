@@ -482,8 +482,8 @@ godot::Dictionary Wrapper::GetCoreIdentity() const
     std::lock_guard<std::mutex> lock(m_core_identity_mutex);
     if (!m_core_identity_ready)
         return out;
-    out["library_name"] = godot::String(m_core_library_name.c_str());
-    out["library_version"] = godot::String(m_core_library_version.c_str());
+    out["library_name"] = godot::String::utf8(m_core_library_name.c_str());
+    out["library_version"] = godot::String::utf8(m_core_library_version.c_str());
     out["api_version"] = static_cast<int64_t>(m_core_api_version);
     out["serialize_size"] = m_core_serialize_size;
     return out;

@@ -280,7 +280,7 @@ godot::Array Wrapper::GetControllerInfo() const
         for (const auto& ctrl : controllers[port])
         {
             Dictionary entry;
-            entry["name"] = String(ctrl.name.c_str());
+            entry["name"] = String::utf8(ctrl.name.c_str());
             entry["id"]   = static_cast<int>(ctrl.id);
             port_controllers.append(entry);
         }

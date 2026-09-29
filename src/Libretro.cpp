@@ -692,9 +692,9 @@ Dictionary Libretro::ConvertOptionCategories(const std::unordered_map<std::strin
     for (const auto& [key, value] : categories)
     {
         Ref<LibretroOptionCategory> category = memnew(LibretroOptionCategory);
-        category->m_desc = value.desc.c_str();
-        category->m_info = value.info.c_str();
-        result[String(key.c_str())] = category;
+        category->m_desc = String::utf8(value.desc.c_str());
+        category->m_info = String::utf8(value.info.c_str());
+        result[String::utf8(key.c_str())] = category;
     }
     return result;
 }
@@ -705,21 +705,21 @@ Dictionary Libretro::ConvertOptionDefinitions(const std::unordered_map<std::stri
     for (const auto& [key, value] : definitions)
     {
         Ref<LibretroOptionDefinition> definition = memnew(LibretroOptionDefinition);
-        definition->m_desc = value.desc.c_str();
-        definition->m_desc_categorized = value.desc_categorized.c_str();
-        definition->m_info = value.info.c_str();
-        definition->m_info_categorized = value.info_categorized.c_str();
-        definition->m_category_key = value.category_key.c_str();
+        definition->m_desc = String::utf8(value.desc.c_str());
+        definition->m_desc_categorized = String::utf8(value.desc_categorized.c_str());
+        definition->m_info = String::utf8(value.info.c_str());
+        definition->m_info_categorized = String::utf8(value.info_categorized.c_str());
+        definition->m_category_key = String::utf8(value.category_key.c_str());
         definition->m_values = Array();
         for (const auto& val : value.values)
         {
             Ref<LibretroOptionValue> option_value = memnew(LibretroOptionValue);
-            option_value->m_value = val.value.c_str();
-            option_value->m_label = val.label.c_str();
+            option_value->m_value = String::utf8(val.value.c_str());
+            option_value->m_label = String::utf8(val.label.c_str());
             definition->m_values.append(option_value);
         }
-        definition->m_default_value = value.default_value.c_str();
-        result[String(key.c_str())] = definition;
+        definition->m_default_value = String::utf8(value.default_value.c_str());
+        result[String::utf8(key.c_str())] = definition;
     }
     return result;
 }
@@ -728,7 +728,7 @@ Dictionary Libretro::ConvertOptionValues(const std::unordered_map<std::string, s
 {
     Dictionary result;
     for (const auto& [key, value] : values)
-        result[String(key.c_str())] = String(value.c_str());
+        result[String::utf8(key.c_str())] = String::utf8(value.c_str());
     return result;
 }
 

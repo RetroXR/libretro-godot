@@ -165,7 +165,7 @@ void Wrapper::FlushSramIfDirty(bool final_flush)
     // it; a listener that uploads must never read a half-written save.
     if (Libretro* node = LiveLibretroNode())
         node->NotifySramFlushed(
-            godot::String(m_sram_path.c_str()), static_cast<int64_t>(size), final_flush);
+            godot::String::utf8(m_sram_path.c_str()), static_cast<int64_t>(size), final_flush);
 }
 
 /// Emu thread: memory-card hot-swap. Flush the old card, adopt the new one.
@@ -267,7 +267,7 @@ void Wrapper::FlushPackIfDirty(bool final_flush)
 
     if (Libretro* node = LiveLibretroNode())
         node->NotifySramFlushed(
-            godot::String(m_pack_path.c_str()), static_cast<int64_t>(size), final_flush);
+            godot::String::utf8(m_pack_path.c_str()), static_cast<int64_t>(size), final_flush);
 }
 
 /// The A-slot id is deliberately never used for the Sufami Turbo: snes9x answers
@@ -397,7 +397,7 @@ void Wrapper::FlushSramBIfDirty(bool final_flush)
 
     if (Libretro* node = LiveLibretroNode())
         node->NotifySramFlushed(
-            godot::String(m_sram_b_path.c_str()), static_cast<int64_t>(size), final_flush);
+            godot::String::utf8(m_sram_b_path.c_str()), static_cast<int64_t>(size), final_flush);
 }
 
 /// Emu thread: second-region hot-swap, the mirror of ApplySramSwap.
@@ -766,7 +766,7 @@ void Wrapper::FlushSramRegionIfDirty(int index, bool final_flush)
 
     if (Libretro* node = LiveLibretroNode())
         node->NotifySramFlushed(
-            godot::String(r.path.c_str()), static_cast<int64_t>(len), final_flush);
+            godot::String::utf8(r.path.c_str()), static_cast<int64_t>(len), final_flush);
 }
 
 void Wrapper::FlushSramRegionsIfDirty(bool final_flush)

@@ -384,7 +384,7 @@ void Wrapper::FailNetplayRollback(const std::string& reason)
     LogError("Rollback cannot recover safely: " + reason);
     if (Libretro* node = LiveLibretroNode())
         node->call_deferred("emit_signal", "netplay_error",
-            godot::String(reason.c_str()));
+            godot::String::utf8(reason.c_str()));
     // Continuing from a timeline that failed to rewind would silently desync.
     // Use the same deferred-stop path as RETRO_ENVIRONMENT_SHUTDOWN so teardown
     // remains on the main thread and never joins the emulation thread itself.
