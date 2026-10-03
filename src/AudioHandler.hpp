@@ -3,6 +3,7 @@
 #include <godot_cpp/classes/ref.hpp>
 #include <godot_cpp/classes/audio_stream_generator.hpp>
 #include <godot_cpp/classes/audio_stream_generator_playback.hpp>
+#include <godot_cpp/classes/audio_stream_player.hpp>
 #include <godot_cpp/classes/audio_stream_player3d.hpp>
 #include <godot_cpp/classes/object.hpp>
 #include <godot_cpp/classes/ref_counted.hpp>
@@ -27,6 +28,12 @@ namespace Xenu
 class AudioHandler
 {
 public:
+    enum class GodotAudioPlayerKind
+    {
+        Spatial3D,
+        Stereo,
+    };
+
     static void SampleCallback(int16_t left, int16_t right);
     static size_t SampleBatchCallback(const int16_t* data, size_t frames);
 
@@ -44,7 +51,17 @@ public:
     void SilenceForTeardown();
     void SetAudioStreamPlayer(godot::AudioStreamPlayer3D* player)
     {
+        m_godot_player_kind = GodotAudioPlayerKind::Spatial3D;
         m_audio_stream_player_id = player ? static_cast<uint64_t>(player->get_instance_id()) : 0;
+    }
+    void SetAudioStreamPlayer(godot::AudioStreamPlayer* player)
+    {
+        m_godot_player_kind = GodotAudioPlayerKind::Stereo;
+        m_audio_stream_player_id = player ? static_cast<uint64_t>(player->get_instance_id()) : 0;
+    }
+    void SetMetaXRAudioAllowed(bool allowed)
+    {
+        m_meta_xr_audio_allowed = allowed;
     }
     bool IsReady() const { return m_sink_ready.load(std::memory_order_acquire); }
 
@@ -103,8 +120,8 @@ public:
     void SetLastBrakeMs(double ms) { m_last_brake_ms.store(ms, std::memory_order_relaxed); }
 
     /// The Meta XR Audio voice ids this core is being spatialized through, or
-    /// empty when running on the fallback AudioStreamPlayer3D. GDScript
-    /// positions these; it does not own their lifetime.
+    /// empty when running on a Godot audio stream player. GDScript
+    /// positions SDK voices; it does not own their lifetime.
     godot::PackedInt32Array GetVoiceIds() const;
 
     /// Which source channel feeds each speaker: 0 stereo, 1 the left channel to
@@ -123,7 +140,7 @@ public:
     /// handed back when it stops.
     ///
     /// Returns what is actually engaged, which is false when the extension is
-    /// absent, when the mixer has no voices left, or when the fallback backend is
+    /// absent, when the mixer has no voices left, or when the Godot audio backend is
     /// in use -- in every case the stereo path goes on working unchanged. Degrade
     /// to stereo, never to silence.
     ///
@@ -163,22 +180,31 @@ public:
     /// controller.
     ///
     /// False tells the core to mix the block into its main stream instead: the
-    /// fallback backend has no voices to give, and the SDK can run out of them.
+    /// Godot audio backend has no voices to give, and the SDK can run out of them.
     bool PushControllerFrames(unsigned port, unsigned index, const int16_t* data, size_t frames);
 
     /// The voice device `index` on `port` plays on, or -1 until it has made a
     /// sound. GDScript positions it; it does not own it.
     int GetControllerVoiceId(unsigned port, unsigned index) const;
 
+
 private:
-    // --- fallback: Godot's own 3D panning -----------------------------------
+    // --- Godot audio: Godot's own stream players --------------------------------
     godot::Ref<godot::AudioStreamGenerator> m_audio_stream_generator = nullptr;
     godot::Ref<godot::AudioStreamGeneratorPlayback> m_audio_stream_generator_playback = nullptr;
     /// The player is a child of the Libretro node, so the SceneTree owns it and is
     /// free to destroy it before this handler tears down — at which point a raw
     /// pointer is a use-after-free, intermittently, depending on teardown order.
     /// Held by id and resolved per use, the way Wrapper holds the screen mesh.
-    godot::AudioStreamPlayer3D* LivePlayer() const;
+    godot::AudioStreamPlayer3D* LiveSpatialPlayer() const;
+    godot::AudioStreamPlayer* LiveStereoPlayer() const;
+    bool HasGodotPlayer() const;
+    bool SetGodotPlayerStream(const godot::Ref<godot::AudioStreamGenerator>& stream);
+    godot::Ref<godot::AudioStreamGeneratorPlayback> GetGodotPlayerPlayback() const;
+    void PlayGodotPlayer();
+    void StopGodotPlayer();
+    void FreeGodotPlayer();
+    GodotAudioPlayerKind m_godot_player_kind = GodotAudioPlayerKind::Spatial3D;
     uint64_t m_audio_stream_player_id = 0;
     // Audio can arrive from a core-created worker while the main thread changes
     // the backend. Recursive because batch processing calls the sink helpers.
@@ -197,6 +223,7 @@ private:
     int    m_voice_l = -1;
     int    m_voice_r = -1;
     bool   m_use_sdk = false;
+    bool   m_meta_xr_audio_allowed = true;
 
     // --- surround -----------------------------------------------------------
     /// FL, FR, C, LFE, SL, SR -- the decoder's own output order. The first two

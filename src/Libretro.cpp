@@ -50,6 +50,7 @@ void Libretro::AbandonWrapper()
     AbandonedWrappers().push_back(std::move(m_wrapper));
     m_wrapper = std::make_unique<Wrapper>();
     m_wrapper->m_libretro_node_id = static_cast<uint64_t>(get_instance_id());
+    m_wrapper->SetAudioPlaybackMode(m_audio_playback_mode);
 }
 
 void Libretro::ConnectOptionsReady(const godot::Callable& callable, uint32_t flags)
@@ -113,6 +114,13 @@ void Libretro::SetAudioPlaying(bool playing)
 {
     if (m_wrapper)
         m_wrapper->SetAudioPlaying(playing);
+}
+
+void Libretro::SetAudioPlaybackMode(int mode)
+{
+    m_audio_playback_mode = mode >= 0 && mode <= 2 ? mode : 0;
+    if (m_wrapper)
+        m_wrapper->SetAudioPlaybackMode(m_audio_playback_mode);
 }
 
 void Libretro::SetCoreOption(const godot::String& key, const godot::String& value)
@@ -751,6 +759,7 @@ void Libretro::_bind_methods()
     ClassDB::bind_method(D_METHOD("GetControllerScreenTexture", "port", "index"), &Libretro::GetControllerScreenTexture, DEFVAL(0));
     ClassDB::bind_method(D_METHOD("GetVideoImage"), &Libretro::GetVideoImage);
     ClassDB::bind_method(D_METHOD("SetAudioPlaying", "playing"), &Libretro::SetAudioPlaying);
+    ClassDB::bind_method(D_METHOD("SetAudioPlaybackMode", "mode"), &Libretro::SetAudioPlaybackMode);
     ClassDB::bind_method(D_METHOD("SetCoreOption", "key", "value"), &Libretro::SetCoreOption);
     ClassDB::bind_method(D_METHOD("PeekCoreOptions", "root_directory", "core_name"), &Libretro::PeekCoreOptions);
     ClassDB::bind_method(D_METHOD("SetInputEnabled", "enabled"), &Libretro::SetInputEnabled);

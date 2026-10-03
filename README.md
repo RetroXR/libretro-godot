@@ -130,14 +130,14 @@ separately.
 ```gdscript
 var voices: PackedInt32Array = libretro.GetAudioVoiceIds()
 if voices.is_empty():
-    # fallback path: position the AudioStreamPlayer3D child instead
+    # Godot audio path: position the AudioStreamPlayer3D child instead
 else:
     # SDK path: place each voice in 3D, e.g. at the TV's speaker positions
     mx.set_voice_position(voices[0], origin - right * separation)
     mx.set_voice_position(voices[1], origin + right * separation)
 ```
 
-**An empty array means the fallback path is in use**, and that is the check callers
+**An empty array means the Godot audio path is in use**, and that is the check callers
 should branch on. The C++ side owns the voices' lifetime (created in `AudioHandler::Init`,
 released in `DeInit`); GDScript only positions them and sets their gain.
 

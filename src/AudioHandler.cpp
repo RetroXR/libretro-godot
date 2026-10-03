@@ -393,12 +393,12 @@ void AudioHandler::Init(float buffer_capacity_sec, double sample_rate)
     AudioServer* audio = AudioServer::get_singleton();
     m_mix_rate = audio ? audio->get_mix_rate() : 48000.0;
 
-    // Prefer Meta XR Audio; fall through silently when the extension or its
-    // native library is absent, which is the point of having a fallback.
+    // Auto mode may use Meta XR Audio. Explicit Godot playback modes always use
+    // the selected Godot stream player path, even when Meta XR Audio is present.
     m_mx_id = 0;
     m_use_sdk = false;
     Engine* engine = Engine::get_singleton();
-    if (engine && engine->has_singleton("MetaXRAudio"))
+    if (m_meta_xr_audio_allowed && engine && engine->has_singleton("MetaXRAudio"))
     {
         Object* mx = engine->get_singleton("MetaXRAudio");
         if (mx && static_cast<bool>(mx->call("is_available")))
@@ -486,26 +486,24 @@ void AudioHandler::Init(float buffer_capacity_sec, double sample_rate)
         m_audio_sample_rate > 0.0 ? m_audio_sample_rate : m_mix_rate);
     m_audio_stream_generator->set_buffer_length(m_audio_buffer_capacity_sec);
 
-    AudioStreamPlayer3D* player = LivePlayer();
-    if (!player)
+    if (!SetGodotPlayerStream(m_audio_stream_generator))
     {
-        LogError("AudioHandler: fallback AudioStreamPlayer3D is missing");
+        LogError("AudioHandler: Godot audio stream player is missing");
         return;
     }
-    player->set_stream(m_audio_stream_generator);
-    player->play();
+    PlayGodotPlayer();
 
-    m_audio_stream_generator_playback = player->get_stream_playback();
+    m_audio_stream_generator_playback = GetGodotPlayerPlayback();
     if (m_audio_stream_generator_playback.is_null())
     {
-        LogError("AudioHandler: failed to start fallback audio stream");
-        player->stop();
+        LogError("AudioHandler: failed to start Godot audio stream");
+        StopGodotPlayer();
         return;
     }
     m_sink_ready.store(true, std::memory_order_release);
     const bool playing = m_playing.load(std::memory_order_relaxed);
     if (!playing || m_audio_sample_rate <= 0.0)
-        player->stop();
+        StopGodotPlayer();
     m_accept_audio.store(playing && m_audio_sample_rate > 0.0,
                          std::memory_order_release);
 }
@@ -533,9 +531,9 @@ bool AudioHandler::ReinitSampleRate(double sample_rate)
                 m_discrete->call("flush");
             FlushControllerVoices();
         }
-        else if (AudioStreamPlayer3D* player = LivePlayer())
+        else
         {
-            player->stop();
+            StopGodotPlayer();
         }
         m_audio_sample_rate = 0.0;
         m_frames_produced.store(0, std::memory_order_relaxed);
@@ -578,8 +576,7 @@ bool AudioHandler::ReinitSampleRate(double sample_rate)
     }
     else
     {
-        AudioStreamPlayer3D* player = LivePlayer();
-        if (!player)
+        if (!HasGodotPlayer())
         {
             m_sink_ready.store(false, std::memory_order_release);
             return false;
@@ -593,37 +590,37 @@ bool AudioHandler::ReinitSampleRate(double sample_rate)
         const Ref<AudioStreamGenerator> previous_generator = m_audio_stream_generator;
         const Ref<AudioStreamGeneratorPlayback> previous_playback =
             m_audio_stream_generator_playback;
-        player->stop();
-        player->set_stream(replacement);
-        player->play();
+        StopGodotPlayer();
+        SetGodotPlayerStream(replacement);
+        PlayGodotPlayer();
         Ref<AudioStreamGeneratorPlayback> replacement_playback =
-            player->get_stream_playback();
+            GetGodotPlayerPlayback();
         if (replacement_playback.is_null())
         {
-            player->stop();
-            player->set_stream(previous_generator);
+            StopGodotPlayer();
+            SetGodotPlayerStream(previous_generator);
             m_audio_stream_generator = previous_generator;
             m_audio_stream_generator_playback = previous_playback;
             bool restored = previous_generator.is_valid() && previous_playback.is_valid();
             if (m_playing.load(std::memory_order_relaxed))
             {
-                player->play();
+                PlayGodotPlayer();
                 m_audio_stream_generator_playback =
-                    player->get_stream_playback();
+                    GetGodotPlayerPlayback();
                 restored = m_audio_stream_generator_playback.is_valid();
             }
             m_sink_ready.store(restored, std::memory_order_release);
             m_accept_audio.store(m_playing.load(std::memory_order_relaxed) && restored,
                                  std::memory_order_release);
             if (!restored)
-                LogError("AudioHandler: failed to restore the previous fallback stream");
+                LogError("AudioHandler: failed to restore the previous Godot audio stream");
             return false;
         }
 
         m_audio_stream_generator = replacement;
         m_audio_stream_generator_playback = replacement_playback;
         if (!m_playing.load(std::memory_order_relaxed))
-            player->stop();
+            StopGodotPlayer();
     }
 
     m_audio_sample_rate = sample_rate;
@@ -645,11 +642,98 @@ Object* AudioHandler::LiveMx() const
     return ObjectDB::get_instance(m_mx_id);
 }
 
-AudioStreamPlayer3D* AudioHandler::LivePlayer() const
+AudioStreamPlayer3D* AudioHandler::LiveSpatialPlayer() const
 {
     if (m_audio_stream_player_id == 0)
         return nullptr;
     return Object::cast_to<AudioStreamPlayer3D>(ObjectDB::get_instance(m_audio_stream_player_id));
+}
+
+AudioStreamPlayer* AudioHandler::LiveStereoPlayer() const
+{
+    if (m_audio_stream_player_id == 0)
+        return nullptr;
+    return Object::cast_to<AudioStreamPlayer>(ObjectDB::get_instance(m_audio_stream_player_id));
+}
+
+bool AudioHandler::HasGodotPlayer() const
+{
+    return m_godot_player_kind == GodotAudioPlayerKind::Stereo
+        ? LiveStereoPlayer() != nullptr
+        : LiveSpatialPlayer() != nullptr;
+}
+
+bool AudioHandler::SetGodotPlayerStream(const Ref<AudioStreamGenerator>& stream)
+{
+    if (m_godot_player_kind == GodotAudioPlayerKind::Stereo)
+    {
+        if (AudioStreamPlayer* player = LiveStereoPlayer())
+        {
+            player->set_stream(stream);
+            return true;
+        }
+        return false;
+    }
+
+    if (AudioStreamPlayer3D* player = LiveSpatialPlayer())
+    {
+        player->set_stream(stream);
+        return true;
+    }
+    return false;
+}
+
+Ref<AudioStreamGeneratorPlayback> AudioHandler::GetGodotPlayerPlayback() const
+{
+    if (m_godot_player_kind == GodotAudioPlayerKind::Stereo)
+    {
+        if (AudioStreamPlayer* player = LiveStereoPlayer())
+            return player->get_stream_playback();
+        return Ref<AudioStreamGeneratorPlayback>();
+    }
+
+    if (AudioStreamPlayer3D* player = LiveSpatialPlayer())
+        return player->get_stream_playback();
+    return Ref<AudioStreamGeneratorPlayback>();
+}
+
+void AudioHandler::PlayGodotPlayer()
+{
+    if (m_godot_player_kind == GodotAudioPlayerKind::Stereo)
+    {
+        if (AudioStreamPlayer* player = LiveStereoPlayer())
+            player->play();
+        return;
+    }
+
+    if (AudioStreamPlayer3D* player = LiveSpatialPlayer())
+        player->play();
+}
+
+void AudioHandler::StopGodotPlayer()
+{
+    if (m_godot_player_kind == GodotAudioPlayerKind::Stereo)
+    {
+        if (AudioStreamPlayer* player = LiveStereoPlayer())
+            player->stop();
+        return;
+    }
+
+    if (AudioStreamPlayer3D* player = LiveSpatialPlayer())
+        player->stop();
+}
+
+void AudioHandler::FreeGodotPlayer()
+{
+    Node* player = m_godot_player_kind == GodotAudioPlayerKind::Stereo
+        ? static_cast<Node*>(LiveStereoPlayer())
+        : static_cast<Node*>(LiveSpatialPlayer());
+    if (!player)
+        return;
+
+    if (Node* parent = player->get_parent())
+        parent->remove_child(player);
+    memdelete(player);
 }
 
 void AudioHandler::SilenceForTeardown()
@@ -724,14 +808,7 @@ void AudioHandler::DeInit()
     if (m_audio_stream_generator.is_valid())
         m_audio_stream_generator.unref();
 
-    // Only free it if it is still there: at application exit the SceneTree may have
-    // destroyed this child already, and freeing it twice crashes on the way out.
-    if (AudioStreamPlayer3D* player = LivePlayer())
-    {
-        if (Node* parent = player->get_parent())
-            parent->remove_child(player);
-        memdelete(player);
-    }
+    FreeGodotPlayer();
     m_audio_stream_player_id = 0;
 }
 
@@ -766,23 +843,22 @@ void AudioHandler::SetPlaying(bool playing)
         return;
     }
 
-    AudioStreamPlayer3D* player = LivePlayer();
-    if (!player)
+    if (!HasGodotPlayer())
         return;
     if (playing && m_audio_sample_rate <= 0.0)
     {
-        player->stop();
+        StopGodotPlayer();
         return;
     }
     if (playing)
     {
-        player->play();
-        m_audio_stream_generator_playback = player->get_stream_playback();
+        PlayGodotPlayer();
+        m_audio_stream_generator_playback = GetGodotPlayerPlayback();
         m_accept_audio.store(m_audio_stream_generator_playback.is_valid(), std::memory_order_release);
     }
     else
     {
-        player->stop();
+        StopGodotPlayer();
     }
 }
 
@@ -824,7 +900,7 @@ bool AudioHandler::SetSurroundEnabled(bool on)
     }
     if (m_surround.load(std::memory_order_relaxed))
         return true;
-    // The fallback backend has no voices to place, so there is nothing for six
+    // The Godot audio backend has no voices to place, so there is nothing for six
     // channels to come out of. Documented rule: Linux and macOS get no surround.
     if (!m_use_sdk)
         return false;

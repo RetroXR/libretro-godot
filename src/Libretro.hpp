@@ -209,6 +209,9 @@ public:
     /// Whether this machine's sound is heard. A console wired to nothing is
     /// silent; it used to be silenced as a side effect of having no screen mesh.
     void SetAudioPlaying(bool playing);
+    /// Select the audio path for the next content start:
+    /// 0 = auto legacy behavior, 1 = force Godot spatial, 2 = force Godot stereo.
+    void SetAudioPlaybackMode(int mode);
     void SetCoreOption(const godot::String& key, const godot::String& value);
     void SetInputEnabled(bool enabled);
 
@@ -227,17 +230,17 @@ public:
     /// Returns per-port controller info as Array[Dictionary{port, controllers: Array[{name,id}], current_id}].
     godot::Array GetControllerInfo();
     /// Meta XR Audio voice ids this core's sound is spatialized through, or
-    /// empty when it is running on the fallback AudioStreamPlayer3D.
+    /// empty when it is running on the Godot AudioStreamPlayer3D.
     godot::PackedInt32Array GetAudioVoiceIds();
     /// The Meta XR Audio voice a controller's own sound plays on -- device `index`
     /// on `port`, index 0 being a Wii Remote's speaker -- or -1 until that device
-    /// has made a sound, and always -1 on the fallback backend.
+    /// has made a sound, and always -1 on the Godot audio backend.
     int GetControllerAudioVoiceId(int port, int index);
 
     /// True once the audio sink is up and a backend has actually been chosen.
     ///
     /// Until then GetAudioVoiceIds() answers empty for a reason that cannot be
-    /// told apart from the fallback backend's permanent empty, because
+    /// told apart from the Godot audio backend's permanent empty, because
     /// StartContent only ENQUEUES the audio init -- Wrapper posts a
     /// ThreadCommandInitAudio that the node drains in a later _process. A caller
     /// binding on that empty is guessing, and how long it has to wait is the
@@ -521,6 +524,7 @@ private:
     void AbandonWrapper();
 
     std::unique_ptr<Wrapper> m_wrapper;
+    int m_audio_playback_mode = 0;
 
     /// Seconds since the last rc_client_idle. Every node runs this, so the tick
     /// costs one mutexed no-op per node per second when nothing is signed in.

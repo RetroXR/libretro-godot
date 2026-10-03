@@ -4,6 +4,7 @@
 
 #include <godot_cpp/classes/global_constants.hpp>
 #include <godot_cpp/classes/os.hpp>
+#include <godot_cpp/classes/audio_stream_player.hpp>
 #include <godot_cpp/classes/audio_stream_player3d.hpp>
 #include <godot_cpp/classes/image.hpp>
 #include <godot_cpp/classes/image_texture.hpp>
@@ -110,19 +111,33 @@ void Wrapper::StartSubsystemContent(const std::string& root_directory, const std
     // run's ROM images.
     std::vector<std::vector<unsigned char>>().swap(m_subsystem_buffers);
 
-    auto audio_stream_player = memnew(AudioStreamPlayer3D);
-    audio_stream_player->set_name("AudioStreamPlayer3D");
-    audio_stream_player->set_attenuation_model(AudioStreamPlayer3D::ATTENUATION_INVERSE_DISTANCE);
-    audio_stream_player->set_panning_strength(1.0f);
-    audio_stream_player->set_max_db(0.0f);
     Libretro* owner = LiveLibretroNode();
     if (!owner)
     {
-        memdelete(audio_stream_player);
         LogError("StartContent: the Libretro node is gone");
         return;
     }
-    owner->add_child(audio_stream_player);
+
+    m_audio_handler = std::make_unique<AudioHandler>();
+    m_audio_handler->SetMetaXRAudioAllowed(m_audio_playback_mode == AudioPlaybackMode::Auto);
+    if (m_audio_playback_mode == AudioPlaybackMode::GodotStereo)
+    {
+        auto audio_stream_player = memnew(AudioStreamPlayer);
+        audio_stream_player->set_name("AudioStreamPlayer");
+        audio_stream_player->set_volume_db(0.0f);
+        owner->add_child(audio_stream_player);
+        m_audio_handler->SetAudioStreamPlayer(audio_stream_player);
+    }
+    else
+    {
+        auto audio_stream_player = memnew(AudioStreamPlayer3D);
+        audio_stream_player->set_name("AudioStreamPlayer3D");
+        audio_stream_player->set_attenuation_model(AudioStreamPlayer3D::ATTENUATION_INVERSE_DISTANCE);
+        audio_stream_player->set_panning_strength(1.0f);
+        audio_stream_player->set_max_db(0.0f);
+        owner->add_child(audio_stream_player);
+        m_audio_handler->SetAudioStreamPlayer(audio_stream_player);
+    }
 
     std::filesystem::path core_path = ResolveCorePath(root_directory, core_name);
 
@@ -130,8 +145,6 @@ void Wrapper::StartSubsystemContent(const std::string& root_directory, const std
     m_trampolines = std::make_unique<CallbackTrampolines>(this);
     m_environment_handler = std::make_unique<EnvironmentHandler>();
     m_video_handler = std::make_unique<VideoHandler>();
-    m_audio_handler = std::make_unique<AudioHandler>();
-    m_audio_handler->SetAudioStreamPlayer(audio_stream_player);
     m_input_handler = std::make_unique<InputHandler>();
     m_options_handler = std::make_unique<OptionsHandler>();
     m_message_handler = std::make_unique<MessageHandler>();
@@ -360,6 +373,22 @@ Ref<ImageTexture> Wrapper::GetControllerScreenTexture(int port, int index)
         screen.texture = ImageTexture::create_from_image(image);
     screen.seen = stamp;
     return screen.texture;
+}
+
+void Wrapper::SetAudioPlaybackMode(int mode)
+{
+    switch (mode)
+    {
+        case 1:
+            m_audio_playback_mode = AudioPlaybackMode::GodotSpatial;
+            break;
+        case 2:
+            m_audio_playback_mode = AudioPlaybackMode::GodotStereo;
+            break;
+        default:
+            m_audio_playback_mode = AudioPlaybackMode::Auto;
+            break;
+    }
 }
 
 void Wrapper::SetAudioPlaying(bool playing)

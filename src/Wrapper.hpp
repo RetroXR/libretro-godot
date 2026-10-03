@@ -54,6 +54,13 @@ class Wrapper
 {
 public:
     Wrapper() = default;
+    enum class AudioPlaybackMode
+    {
+        Auto = 0,
+        GodotSpatial = 1,
+        GodotStereo = 2,
+    };
+
     ~Wrapper();
 
     Wrapper(const Wrapper&) = delete;
@@ -119,6 +126,11 @@ public:
     /// SetScreenMesh — a machine with nowhere to put its picture was muted — which
     /// only worked while the picture went somewhere by being PAINTED there.
     void SetAudioPlaying(bool playing);
+    /// Select the audio path for the next content start:
+    /// 0 = auto legacy behavior (Meta XR when available, then Godot spatial),
+    /// 1 = force Godot spatial AudioStreamPlayer3D,
+    /// 2 = force Godot non-spatial stereo AudioStreamPlayer.
+    void SetAudioPlaybackMode(int mode);
 
     const std::unordered_map<std::string, OptionCategory>& GetOptionCategories() const { return m_options_handler->GetCategories(); }
     const std::unordered_map<std::string, OptionDefinition>& GetOptionDefinitions() const { return m_options_handler->GetDefinitions(); }
@@ -657,6 +669,7 @@ public:
     std::unique_ptr<EnvironmentHandler> m_environment_handler = nullptr;
     std::unique_ptr<VideoHandler> m_video_handler = nullptr;
     std::unique_ptr<AudioHandler> m_audio_handler = nullptr;
+    AudioPlaybackMode m_audio_playback_mode = AudioPlaybackMode::Auto;
     // Exists before a core starts so physical peripherals can already feed (and
     // diagnostics can inspect) the frontend boundary. StartContent replaces it
     // with a clean handler for the new core.
