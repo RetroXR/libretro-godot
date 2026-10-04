@@ -1,6 +1,7 @@
 #include "LinkCoordinator.hpp"
 
 #include <algorithm>
+#include <cstdlib>
 #include <limits>
 
 #include "Debug.hpp"
@@ -19,6 +20,24 @@ namespace Xenu
 {
 namespace
 {
+/// Whether a park is timed.
+///
+/// Always in a dev build. Everywhere else only when XENU_LINK_WAIT_DIAGNOSTICS is
+/// set in the environment, because godot-cpp defines NDEBUG for template_debug
+/// too: the compile-time switch alone left the timing out of every build a room
+/// or a probe actually loads, and "release wait timing disabled" was all a
+/// stalling bus could ever say for itself. Read once; two clock readings a park
+/// are not worth paying for a question nobody asked.
+bool MeasureWaits()
+{
+#if XENU_MEASURE_LINK_WAITS
+    return true;
+#else
+    static const bool on = std::getenv("XENU_LINK_WAIT_DIAGNOSTICS") != nullptr;
+    return on;
+#endif
+}
+
 /// a * b / c without losing the top half of the product.
 ///
 /// Converting a tick count between two clock rates overflows 64 bits long
@@ -448,6 +467,61 @@ void LinkCoordinator::RebuildBuses()
     }
 
     EnsureCvSlotsLocked(m_buses.size());
+    // Who shares a wire with whom may have just changed: see TopologyEpoch.
+    m_topology_epoch.fetch_add(1, std::memory_order_release);
+}
+
+void LinkCoordinator::SetSinkClock(Wrapper* owner, std::shared_ptr<SinkClock> clock)
+{
+    if (!owner)
+    {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(m_mutex);
+    auto held = std::find_if(m_sink_clocks.begin(), m_sink_clocks.end(),
+                             [owner](const auto& entry) { return entry.first == owner; });
+    if (held != m_sink_clocks.end())
+    {
+        held->second = std::move(clock);
+    }
+    else
+    {
+        m_sink_clocks.emplace_back(owner, std::move(clock));
+    }
+    m_topology_epoch.fetch_add(1, std::memory_order_release);
+}
+
+void LinkCoordinator::BusSinkClocks(Wrapper* owner, std::vector<std::shared_ptr<SinkClock>>& out)
+{
+    out.clear();
+    std::lock_guard<std::mutex> lock(m_mutex);
+    for (const auto& ep : m_endpoints)
+    {
+        // Attached at both ends, the same test the ceiling applies: a machine
+        // whose guest is not driving its serial hardware holds nobody up, so
+        // its sink has no say in when anybody else runs.
+        if (ep->owner != owner || !ep->bus || !ep->attached)
+        {
+            continue;
+        }
+        for (const Endpoint* member : ep->bus->members)
+        {
+            if (member->owner == owner || !member->attached)
+            {
+                continue;
+            }
+            auto held = std::find_if(m_sink_clocks.begin(), m_sink_clocks.end(),
+                                     [member](const auto& entry) { return entry.first == member->owner; });
+            if (held == m_sink_clocks.end() || !held->second)
+            {
+                continue;
+            }
+            if (std::find(out.begin(), out.end(), held->second) == out.end())
+            {
+                out.push_back(held->second);
+            }
+        }
+    }
 }
 
 void LinkCoordinator::EnsureCvSlotsLocked(size_t count)
@@ -775,11 +849,14 @@ void LinkCoordinator::ReportCostLocked(const Endpoint& ep) const
     {
         return;
     }
-#if !XENU_MEASURE_LINK_WAITS
-    Log("m" + std::to_string(ep.id) + ":" + std::to_string(ep.port) + " cost: " +
-        std::to_string(ep.advance_calls) + " advance calls, " +
-        std::to_string(ep.advance_waits) + " of them parked (release wait timing disabled)");
-#else
+    if (!MeasureWaits())
+    {
+        Log("m" + std::to_string(ep.id) + ":" + std::to_string(ep.port) + " cost: " +
+            std::to_string(ep.advance_calls) + " advance calls, " +
+            std::to_string(ep.advance_waits) + " of them parked (wait timing off; set "
+            "XENU_LINK_WAIT_DIAGNOSTICS to time them)");
+        return;
+    }
     const double ms = static_cast<double>(ep.blocked_ns) / 1e6;
     const double per_call_us =
         static_cast<double>(ep.blocked_ns) / 1e3 / static_cast<double>(ep.advance_calls);
@@ -792,7 +869,23 @@ void LinkCoordinator::ReportCostLocked(const Endpoint& ep) const
         std::to_string(ep.advance_waits) + " of them parked, " +
         std::to_string(ms) + " ms blocked (" + std::to_string(per_call_us) +
         " us per call)");
-#endif
+}
+
+bool LinkCoordinator::CostFor(Wrapper* owner, unsigned port, Cost& out)
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    const Endpoint* ep = Find(owner, port);
+    if (!ep)
+    {
+        return false;
+    }
+    out.advance_calls = ep->advance_calls;
+    out.advance_waits = ep->advance_waits;
+    out.blocked_ns = ep->blocked_ns;
+    out.worst_block_ns = ep->worst_block_ns;
+    out.stalls_over_20ms = ep->stalls_over_20ms;
+    out.stalls_over_100ms = ep->stalls_over_100ms;
+    return true;
 }
 
 void LinkCoordinator::DropOwner(Wrapper* owner)
@@ -812,6 +905,9 @@ void LinkCoordinator::DropOwner(Wrapper* owner)
         m_endpoints.erase(std::remove_if(m_endpoints.begin(), m_endpoints.end(),
                                          [owner](const std::unique_ptr<Endpoint>& e) { return e->owner == owner; }),
                           m_endpoints.end());
+        m_sink_clocks.erase(std::remove_if(m_sink_clocks.begin(), m_sink_clocks.end(),
+                                           [owner](const auto& entry) { return entry.first == owner; }),
+                            m_sink_clocks.end());
         RebuildBuses();
         LogBusesLocked("after a machine was switched off");
         WakeAllLocked();
@@ -902,6 +998,7 @@ retro_link_port_t *LinkCoordinator::Attach(Wrapper* owner, unsigned port,
 
     Log(ep.label + " attached, protocol '" + ep.protocol_id + "', " + std::to_string(clock_rate) + " Hz");
     LogBusesLocked("after attach");
+    m_topology_epoch.fetch_add(1, std::memory_order_release);
 
     WakeAllLocked();
     return reinterpret_cast<retro_link_port_t *>(static_cast<uintptr_t>(ep.id));
@@ -924,6 +1021,7 @@ void LinkCoordinator::Detach(retro_link_port_t *handle)
             ep->inbox.clear();
             Log(ep->label + " detached; the guest stopped driving its serial port");
             LogBusesLocked("after detach");
+            m_topology_epoch.fetch_add(1, std::memory_order_release);
         }
         WakeAllLocked();
     }
@@ -1261,13 +1359,12 @@ uint64_t LinkCoordinator::Advance(retro_link_port_t *handle, uint64_t local_tick
         return fresh || e->safe_delta != safe_before;
     };
 
-#if XENU_MEASURE_LINK_WAITS
-    if (!m_session_started)
+    const bool measure = MeasureWaits();
+    if (measure && !m_session_started)
     {
         m_session_started = true;
         m_session_start = std::chrono::steady_clock::now();
     }
-#endif
 
     const bool moved = anchor(ep);
     ++ep->advance_calls;
@@ -1355,9 +1452,11 @@ uint64_t LinkCoordinator::Advance(retro_link_port_t *handle, uint64_t local_tick
         // counter. It decides nothing.
         ++ep->advance_waits;
         ++m_counters.advance_waits;
-#if XENU_MEASURE_LINK_WAITS
-        const auto parked_at = std::chrono::steady_clock::now();
-#endif
+        std::chrono::steady_clock::time_point parked_at;
+        if (measure)
+        {
+            parked_at = std::chrono::steady_clock::now();
+        }
         retro_link_port_t *const waiting_on = handle;
 
         // The slot is read now and remembered, not looked up again after the
@@ -1374,11 +1473,9 @@ uint64_t LinkCoordinator::Advance(retro_link_port_t *handle, uint64_t local_tick
         m_cv_slots[slot]->wait(lock);
         --m_cv_parked[slot];
 
-#if XENU_MEASURE_LINK_WAITS
-        const uint64_t slept = static_cast<uint64_t>(
+        const uint64_t slept = !measure ? 0 : static_cast<uint64_t>(
             std::chrono::duration_cast<std::chrono::nanoseconds>(
                 std::chrono::steady_clock::now() - parked_at).count());
-#endif
 
         // The endpoint may have been torn down while this thread slept, so it
         // is looked up again rather than held across the wait. By ID: the memory
@@ -1393,7 +1490,6 @@ uint64_t LinkCoordinator::Advance(retro_link_port_t *handle, uint64_t local_tick
 			}
             return RETRO_LINK_UNBOUNDED;
         }
-#if XENU_MEASURE_LINK_WAITS
         ep->blocked_ns += slept;
         if (slept > 20000000ull)
         {
@@ -1413,7 +1509,6 @@ uint64_t LinkCoordinator::Advance(retro_link_port_t *handle, uint64_t local_tick
                 std::chrono::duration_cast<std::chrono::milliseconds>(
                     std::chrono::steady_clock::now() - m_session_start).count());
         }
-#endif
 
         // Put back on a bus while this thread slept, which is what a cable being
         // seated anywhere on this wire does. Say where this machine is, or the

@@ -9,6 +9,7 @@
 #include <chrono>
 #include <cstdio>
 #include <cstring>
+#include <memory>
 #include <random>
 #include <string>
 #include <thread>
@@ -837,6 +838,71 @@ static void TestFutureMessageKeepsBarrier()
     c.DropOwner(b);
 }
 
+// ── T18: a machine can find the audio sinks on its wire, and only those ─────
+//
+// The pacing loop of a cabled machine brakes on the neediest sink on its bus
+// (AudioHandler::MsUntilBusWantsFrames), and this is where it learns whose those
+// are. Handing back a stranger's would have an uncabled machine's sink deciding
+// when a cabled one runs; missing a peer's is the fault this exists to remove.
+static void TestBusSinkClocks()
+{
+    std::printf("T18 a machine is handed the sinks on its own wire, and the brake they add up to\n");
+    auto& c = LinkCoordinator::Get();
+    Wrapper* a = Fake(0x3701);
+    Wrapper* b = Fake(0x3702);
+    Wrapper* d = Fake(0x3703);   // powered on, cabled to nothing
+    auto sink_a = std::make_shared<Xenu::SinkClock>();
+    auto sink_b = std::make_shared<Xenu::SinkClock>();
+    auto sink_d = std::make_shared<Xenu::SinkClock>();
+    c.SetSinkClock(a, sink_a);
+    c.SetSinkClock(b, sink_b);
+    c.SetSinkClock(d, sink_d);
+    DoAttach(c, a, 0, "ps2-ilink-1394", GBA_HZ);
+    DoAttach(c, b, 0, "ps2-ilink-1394", GBA_HZ);
+    DoAttach(c, d, 0, "ps2-ilink-1394", GBA_HZ);
+
+    std::vector<std::shared_ptr<Xenu::SinkClock>> found{sink_d};
+    c.BusSinkClocks(a, found);
+    Check(found.empty(), "nothing cabled: no sink but its own, and the list is cleared");
+
+    const uint64_t before = c.TopologyEpoch();
+    c.Connect(a, 0, b, 0);
+    Check(c.TopologyEpoch() != before, "seating a cable moves the epoch a loop watches");
+    c.BusSinkClocks(a, found);
+    Check(found.size() == 1 && found[0] == sink_b, "cabled: a is handed b's sink");
+    c.BusSinkClocks(b, found);
+    Check(found.size() == 1 && found[0] == sink_a, "and b is handed a's");
+    c.BusSinkClocks(d, found);
+    Check(found.empty(), "the machine beside them, on no wire, is handed neither");
+
+    // What a peer's sink is worth to the brake. A sink 30 ms over its target as
+    // of `t0` wants audio 30 ms later, and less the longer ago that was said.
+    const int64_t t0 = 1'000'000'000;
+    const int64_t ms = 1'000'000;
+    sink_b->Publish(30.0, t0, true);
+    Check(sink_b->Votes(t0 + 10 * ms), "a fresh reading from a pacing sink counts");
+    Check(sink_b->RemainingMs(t0 + 10 * ms) == 20.0, "and is worth what it was, less the time since");
+    Check(sink_b->RemainingMs(t0 + 40 * ms) == 0.0, "run out, it wants audio now and never goes negative");
+    Check(!sink_b->Votes(t0 + 501 * ms), "a reading half a second old says nothing about anybody");
+    sink_b->Publish(30.0, t0, false);
+    Check(!sink_b->Votes(t0 + 10 * ms), "a sink with no target to be over has no say");
+    Check(!sink_d->Votes(t0), "nor one that has never published");
+
+    const uint64_t attached = c.TopologyEpoch();
+    c.Detach(H(b, 0));
+    Check(c.TopologyEpoch() != attached, "a guest dropping its port moves the epoch too");
+    c.BusSinkClocks(a, found);
+    Check(found.empty(), "and a peer that holds nobody up is not braked on");
+
+    DoAttach(c, b, 0, "ps2-ilink-1394", GBA_HZ);
+    c.DropOwner(b);
+    c.BusSinkClocks(a, found);
+    Check(found.empty(), "a machine switched off takes its sink with it");
+
+    c.DropOwner(a);
+    c.DropOwner(d);
+}
+
 int main()
 {
     // Unbuffered, because this binary is run with its output on a pipe and a
@@ -860,6 +926,7 @@ int main()
     TestBootedApartAlign();
     TestMessageWake();
     TestFutureMessageKeepsBarrier();
+    TestBusSinkClocks();
     std::printf("\n%s (%d failure%s)\n", g_failures ? "FAILED" : "ALL PASS",
                 g_failures, g_failures == 1 ? "" : "s");
     return g_failures ? 1 : 0;

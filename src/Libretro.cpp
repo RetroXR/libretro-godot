@@ -526,6 +526,11 @@ double Libretro::GetAudioBrakeMs() const
     return m_wrapper->GetAudioBrakeMs();
 }
 
+Dictionary Libretro::GetPacingStats()
+{
+    return m_wrapper ? m_wrapper->GetPacingStats() : Dictionary();
+}
+
 void Libretro::_exit_tree()
 {
     // Synchronous, unlike StopContent(): leaving the tree means this node can be
@@ -746,6 +751,7 @@ void Libretro::_bind_methods()
     ClassDB::bind_method(D_METHOD("LinkPeerCount", "port"), &Libretro::LinkPeerCount, DEFVAL(0u));
     ClassDB::bind_method(D_METHOD("LinkTraffic", "port"), &Libretro::LinkTraffic, DEFVAL(0u));
     ClassDB::bind_method(D_METHOD("LinkSent", "port"), &Libretro::LinkSent, DEFVAL(0u));
+    ClassDB::bind_method(D_METHOD("LinkCost", "port"), &Libretro::LinkCost, DEFVAL(0u));
     ClassDB::bind_method(D_METHOD("GetVideoTexture"), &Libretro::GetVideoTexture);
     ClassDB::bind_method(D_METHOD("HasControllerScreens"), &Libretro::HasControllerScreens);
     ClassDB::bind_method(D_METHOD("GetControllerScreenTexture", "port", "index"), &Libretro::GetControllerScreenTexture, DEFVAL(0));
@@ -808,6 +814,7 @@ void Libretro::_bind_methods()
     ClassDB::bind_method(D_METHOD("GetDroppedFrameCount"), &Libretro::GetDroppedFrameCount);
     ClassDB::bind_method(D_METHOD("GetAudioBufferOccupancy"), &Libretro::GetAudioBufferOccupancy);
     ClassDB::bind_method(D_METHOD("GetAudioBrakeMs"), &Libretro::GetAudioBrakeMs);
+    ClassDB::bind_method(D_METHOD("GetPacingStats"), &Libretro::GetPacingStats);
     ClassDB::bind_method(D_METHOD("SetSramPath", "path"), &Libretro::SetSramPath);
     ClassDB::bind_method(D_METHOD("SetPackPath", "path"), &Libretro::SetPackPath);
     ClassDB::bind_method(D_METHOD("SetSramBPath", "path", "memory_id"), &Libretro::SetSramBPath,
@@ -1077,5 +1084,22 @@ uint64_t Libretro::LinkTraffic(uint32_t port)
 uint64_t Libretro::LinkSent(uint32_t port)
 {
     return m_wrapper ? LinkCoordinator::Get().Sent(m_wrapper.get(), port) : 0;
+}
+
+Dictionary Libretro::LinkCost(uint32_t port)
+{
+    Dictionary result;
+    LinkCoordinator::Cost cost;
+    if (!m_wrapper || !LinkCoordinator::Get().CostFor(m_wrapper.get(), port, cost))
+    {
+        return result;
+    }
+    result["advance_calls"] = static_cast<int64_t>(cost.advance_calls);
+    result["advance_waits"] = static_cast<int64_t>(cost.advance_waits);
+    result["blocked_ms"] = static_cast<double>(cost.blocked_ns) / 1.0e6;
+    result["worst_block_ms"] = static_cast<double>(cost.worst_block_ns) / 1.0e6;
+    result["stalls_over_20ms"] = static_cast<int64_t>(cost.stalls_over_20ms);
+    result["stalls_over_100ms"] = static_cast<int64_t>(cost.stalls_over_100ms);
+    return result;
 }
 }

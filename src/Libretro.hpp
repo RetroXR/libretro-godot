@@ -175,6 +175,13 @@ public:
     /// accepted rather than where they arrive. Separating the two is what tells
     /// a core that never ran from a message that never got delivered.
     uint64_t LinkSent(uint32_t port);
+    /// What this machine's link port has cost it: `advance_calls`,
+    /// `advance_waits`, and, when XENU_LINK_WAIT_DIAGNOSTICS is set in the
+    /// environment, `blocked_ms`, `worst_block_ms`, `stalls_over_20ms` and
+    /// `stalls_over_100ms`. Cumulative, so a probe takes differences. On a bus
+    /// that stalls, the machine whose blocked time did NOT rise is the one the
+    /// others were waiting for.
+    godot::Dictionary LinkCost(uint32_t port);
 
     /// Ask to track RetroAchievements for the content about to be started.
     /// `console_id` is an RC_CONSOLE_* value (see RaConsoles.for_systemid); 0 means
@@ -481,6 +488,8 @@ public:
     /// a low fill is a core that cannot keep up.
     int64_t GetAudioBufferOccupancy() const;
     double GetAudioBrakeMs() const;
+    /// See Wrapper::GetPacingStats. Empty with no core.
+    godot::Dictionary GetPacingStats();
 
     void ConnectOptionsReady(const godot::Callable& callable, uint32_t flags = 0u);
 

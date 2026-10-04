@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <cstddef>
@@ -13,6 +14,7 @@
 #include <vector>
 
 #include "LinkInterface.hpp"
+#include "SinkClock.hpp"
 
 namespace Xenu
 {
@@ -109,6 +111,44 @@ public:
     int      PeersFor(Wrapper* owner, unsigned port, unsigned* count);
     uint64_t Delivered(Wrapper* owner, unsigned port);
     uint64_t Sent(Wrapper* owner, unsigned port);
+
+    /// What `port` has cost the bus so far, copied from the Endpoint fields of
+    /// the same names. ReportCostLocked says this once, as a machine is torn
+    /// down; a probe needs it WHILE they run, because which console the others
+    /// were parked on during one bad second is the question, and a total cannot
+    /// answer it. Diagnostic only, like everything it copies, and all zero past
+    /// the two counts unless the waits are being timed.
+    struct Cost
+    {
+        uint64_t advance_calls = 0;
+        uint64_t advance_waits = 0;
+        uint64_t blocked_ns = 0;
+        uint64_t worst_block_ns = 0;
+        uint64_t stalls_over_20ms = 0;
+        uint64_t stalls_over_100ms = 0;
+    };
+    bool CostFor(Wrapper* owner, unsigned port, Cost& out);
+
+    // ── Pacing: whose audio sinks share a wire ───────────────────────────────
+    // The bus decides nothing here and reads none of it. It only knows who is
+    // cabled to whom, which is the one thing a machine's pacing loop cannot work
+    // out for itself, so it keeps each machine's SinkClock and hands back the
+    // ones on the same wire. What a loop does with them is AudioHandler's.
+
+    /// The sink `owner` paces against, replacing any it gave before. Forgotten
+    /// by DropOwner with everything else of that machine's.
+    void SetSinkClock(Wrapper* owner, std::shared_ptr<SinkClock> clock);
+
+    /// The sinks of every OTHER machine attached to a bus `owner` is attached
+    /// to. Empty for a machine cabled to nothing, which is nearly all of them.
+    void BusSinkClocks(Wrapper* owner, std::vector<std::shared_ptr<SinkClock>>& out);
+
+    /// Moves whenever the answer BusSinkClocks would give may have: a cable, an
+    /// attach or detach, a machine switched off, a sink registered. A pacing
+    /// loop runs hundreds of passes a second and the bus mutex is the one every
+    /// rendezvous takes, so the loop keeps the list and asks again only when
+    /// this has changed -- one atomic read a pass in a room with no cables.
+    uint64_t TopologyEpoch() const { return m_topology_epoch.load(std::memory_order_acquire); }
 
     /// Largest payload a single Send will carry. Link protocols move a handful
     /// of bytes per transfer; the cap exists so a malformed core cannot make
@@ -416,5 +456,12 @@ private:
     std::vector<Endpoint*> m_handles{nullptr};
     std::vector<std::unique_ptr<Bus>> m_buses;
     std::vector<Link> m_links;
+
+    /// See SetSinkClock. Keyed by machine rather than by endpoint: a sink
+    /// belongs to the machine, which may have several ports or none yet.
+    std::vector<std::pair<Wrapper*, std::shared_ptr<SinkClock>>> m_sink_clocks;
+    /// See TopologyEpoch. Starts at 1 so a loop that has never asked, holding 0,
+    /// asks on its first pass.
+    std::atomic<uint64_t> m_topology_epoch{1};
 };
 }

@@ -29,6 +29,13 @@ constexpr double k_drc_max_delta = 0.005;
 // exact, so this is not an accuracy budget; it is the guard for cores that drive
 // the single-sample callback and so never reach the batch path that publishes.
 constexpr double k_brake_sample_max_age_ms = 100.0;
+
+/// Nanoseconds on the steady clock, the form SinkClock keeps its stamp in.
+int64_t SteadyNowNs()
+{
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+}
 }
 
 void AudioHandler::SampleCallback(int16_t left, int16_t right)
@@ -313,13 +320,8 @@ double AudioHandler::MeasureBrakeMs() const
 void AudioHandler::PublishBrake()
 {
     const double brake = MeasureBrakeMs();
-    m_brake_at_sample_ms.store(brake, std::memory_order_relaxed);
-    // Released last: the pacing loop acquires this, so a non-zero stamp guarantees
-    // the brake beside it is the one measured with it.
-    m_brake_sampled_at_ns.store(
-        std::chrono::duration_cast<std::chrono::nanoseconds>(
-            std::chrono::steady_clock::now().time_since_epoch()).count(),
-        std::memory_order_release);
+    // Only a voice ring has a target to be over or under: see SinkClock::paces.
+    m_clock->Publish(brake, SteadyNowNs(), m_use_sdk && m_sink_target_frames > 0);
 }
 
 double AudioHandler::MsUntilSinkWantsFrames() const
@@ -329,24 +331,42 @@ double AudioHandler::MsUntilSinkWantsFrames() const
     if (!m_accept_audio.load(std::memory_order_acquire))
         return 0.0;
 
-    const int64_t sampled_at_ns = m_brake_sampled_at_ns.load(std::memory_order_acquire);
-    if (sampled_at_ns != 0)
-    {
-        const int64_t now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
-            std::chrono::steady_clock::now().time_since_epoch()).count();
-        const double age_ms = static_cast<double>(now_ns - sampled_at_ns) / 1.0e6;
-        if (age_ms <= k_brake_sample_max_age_ms)
-        {
-            // The sink drains at the mixer's rate, so the brake is worth what it was
-            // measured at minus the real time since. Decaying it is what stops a held
-            // value from re-braking at full strength on every pass and starving the
-            // core of the retro_run that would refresh it.
-            const double remaining_ms = m_brake_at_sample_ms.load(std::memory_order_relaxed) - age_ms;
-            return remaining_ms > 0.0 ? remaining_ms : 0.0;
-        }
-    }
+    const int64_t now_ns = SteadyNowNs();
+    const double age_ms = m_clock->AgeMs(now_ns);
+    // The sink drains at the mixer's rate, so the brake is worth what it was
+    // measured at minus the real time since. Decaying it is what stops a held
+    // value from re-braking at full strength on every pass and starving the
+    // core of the retro_run that would refresh it.
+    if (age_ms >= 0.0 && age_ms <= k_brake_sample_max_age_ms)
+        return m_clock->RemainingMs(now_ns);
 
     return MeasureBrakeMs();
+}
+
+double AudioHandler::MsUntilBusWantsFrames(const std::vector<std::shared_ptr<SinkClock>>& peers) const
+{
+    const double own_ms = MsUntilSinkWantsFrames();
+    // Already wanted here, nobody to give way to, or a sink with no target of its
+    // own to be over: nothing a peer says could change the answer.
+    if (own_ms <= 0.0 || peers.empty() || m_sink_target_frames == 0 || m_mix_rate <= 0.0)
+        return own_ms;
+
+    const int64_t now_ns = SteadyNowNs();
+    double bus_ms = own_ms;
+    for (const std::shared_ptr<SinkClock>& peer : peers)
+    {
+        if (!peer->Votes(now_ns))
+            continue;
+        const double peer_ms = peer->RemainingMs(now_ns);
+        if (peer_ms < bus_ms)
+            bus_ms = peer_ms;
+    }
+
+    // own_ms is how far this sink stands over its target, so what is left after
+    // one more target's worth is how far it stands over "full".
+    const double over_full_ms =
+        own_ms - 1000.0 * static_cast<double>(m_sink_target_frames) / m_mix_rate;
+    return bus_ms > over_full_ms ? bus_ms : over_full_ms;
 }
 
 uint32_t AudioHandler::EffectiveTotalFrames() const

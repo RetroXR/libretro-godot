@@ -132,6 +132,9 @@ void Wrapper::StartSubsystemContent(const std::string& root_directory, const std
     m_video_handler = std::make_unique<VideoHandler>();
     m_audio_handler = std::make_unique<AudioHandler>();
     m_audio_handler->SetAudioStreamPlayer(audio_stream_player);
+    // Where the machines this one gets cabled to will find its sink: a bus
+    // paces off the neediest of them. Forgotten again by DropOwner.
+    LinkCoordinator::Get().SetSinkClock(this, m_audio_handler->Clock());
     m_input_handler = std::make_unique<InputHandler>();
     m_options_handler = std::make_unique<OptionsHandler>();
     m_message_handler = std::make_unique<MessageHandler>();
@@ -376,6 +379,19 @@ uint32_t Wrapper::GetAudioBufferOccupancy() const
 double Wrapper::GetAudioBrakeMs() const
 {
     return m_audio_handler ? m_audio_handler->LastBrakeMs() : 0.0;
+}
+
+Dictionary Wrapper::GetPacingStats()
+{
+    Dictionary stats;
+    stats["run_ms"] = static_cast<double>(m_run_ns.load(std::memory_order_relaxed)) / 1.0e6;
+    stats["run_worst_ms"] =
+        static_cast<double>(m_run_worst_ns.exchange(0, std::memory_order_relaxed)) / 1.0e6;
+    stats["brake_sleep_ms"] =
+        static_cast<double>(m_brake_sleep_ns.load(std::memory_order_relaxed)) / 1.0e6;
+    stats["audio_frames"] =
+        static_cast<int64_t>(m_audio_handler ? m_audio_handler->FramesProduced() : 0);
+    return stats;
 }
 
 bool Wrapper::AcceptsEmuCommands() const

@@ -533,6 +533,9 @@ void Wrapper::EmulationThreadLoop()
     m_declared_fps.store(m_system_av_info.timing.fps, std::memory_order_relaxed);
     m_declared_sample_rate.store(m_system_av_info.timing.sample_rate, std::memory_order_relaxed);
     m_dropped_frames.store(0, std::memory_order_relaxed);
+    m_run_ns.store(0, std::memory_order_relaxed);
+    m_run_worst_ns.store(0, std::memory_order_relaxed);
+    m_brake_sleep_ns.store(0, std::memory_order_relaxed);
 
     // Name, version and API only. All three were read at load from
     // retro_get_system_info and cost no call into the core here, so this is
@@ -580,6 +583,11 @@ void Wrapper::EmulationThreadLoop()
     // The brake resumes the moment the sink asks for a frame again.
     constexpr double SINK_SILENCE_LIMIT_MS = 1000.0;
     auto last_sink_want = std::chrono::steady_clock::now();
+
+    // The sinks of the machines sharing a link bus with this one, and the bus
+    // topology they were read at. See the brake, below.
+    std::vector<std::shared_ptr<SinkClock>> bus_sinks;
+    uint64_t bus_sinks_epoch = 0;
 
     // Battery save: fill SAVE_RAM from the cartridge/memory-card .srm (or the
     // netplay-injected bytes) before the first frame runs.
@@ -695,10 +703,18 @@ void Wrapper::EmulationThreadLoop()
             const auto frame_dur = std::chrono::duration_cast<std::chrono::steady_clock::duration>(
                 std::chrono::duration<double, std::milli>(frame_duration_ms));
 
+            // XENU_UNTHROTTLED in the environment drops both the ceiling and the
+            // brake, so the machine runs as fast as the host can run it. For a
+            // probe: the frame rate is then what the machine COSTS, which a paced
+            // run cannot show -- held to 60 it reads 60 whether it had a tenth of
+            // the host to spare or nothing, and a cabled group that only just
+            // keeps up looks exactly like one with room. Never set in a room.
+            static const bool unthrottled = std::getenv("XENU_UNTHROTTLED") != nullptr;
+
             // Ceiling. Never call the core faster than it asked to be called.
             const double until_due =
                 std::chrono::duration<double, std::milli>(next_call_due - now).count();
-            if (until_due > SLEEP_MARGIN_MS)
+            if (until_due > SLEEP_MARGIN_MS && !unthrottled)
             {
                 std::this_thread::sleep_for(
                     std::chrono::duration<double, std::milli>(until_due - SLEEP_MARGIN_MS));
@@ -708,7 +724,18 @@ void Wrapper::EmulationThreadLoop()
             // Brake. The sink drains at the mixer's rate, so waiting for it to want
             // audio is waiting on real time, whatever the core claims about either
             // its frame rate or its sample count.
-            double brake_ms = m_audio_handler->MsUntilSinkWantsFrames();
+            //
+            // On a link bus it is the wire's brake rather than this machine's: the
+            // machines on it advance together, so one asleep on its own full sink
+            // holds the others still while theirs drain. bus_sinks is empty for a
+            // machine cabled to nothing, and the answer is then its own sink's.
+            const uint64_t topology_epoch = LinkCoordinator::Get().TopologyEpoch();
+            if (topology_epoch != bus_sinks_epoch)
+            {
+                bus_sinks_epoch = topology_epoch;
+                LinkCoordinator::Get().BusSinkClocks(this, bus_sinks);
+            }
+            double brake_ms = unthrottled ? 0.0 : m_audio_handler->MsUntilBusWantsFrames(bus_sinks);
             if (brake_ms > MAX_BRAKE_WAIT_MS)
                 brake_ms = MAX_BRAKE_WAIT_MS;
             m_audio_handler->SetLastBrakeMs(brake_ms);
@@ -722,12 +749,26 @@ void Wrapper::EmulationThreadLoop()
             {
                 std::this_thread::sleep_for(
                     std::chrono::duration<double, std::milli>(brake_ms - SLEEP_MARGIN_MS));
+                // What the sleep really cost, oversleep included: see GetPacingStats.
+                m_brake_sleep_ns.fetch_add(static_cast<uint64_t>(
+                    std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        std::chrono::steady_clock::now() - now).count()),
+                    std::memory_order_relaxed);
                 continue;
             }
 
             m_audio_handler->CallAudioBufferStatusCallback();
 
+            const auto run_began = std::chrono::steady_clock::now();
             m_core->retro_run();
+            {
+                const uint64_t run_ns = static_cast<uint64_t>(
+                    std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        std::chrono::steady_clock::now() - run_began).count());
+                m_run_ns.fetch_add(run_ns, std::memory_order_relaxed);
+                if (run_ns > m_run_worst_ns.load(std::memory_order_relaxed))
+                    m_run_worst_ns.store(run_ns, std::memory_order_relaxed);
+            }
             m_core_ran_frame = true;
             m_frame_counter.fetch_add(1, std::memory_order_relaxed);
 

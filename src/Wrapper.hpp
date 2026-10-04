@@ -531,6 +531,17 @@ public:
     uint32_t GetAudioBufferOccupancy() const;
     double GetAudioBrakeMs() const;
 
+    /// Where the pacing loop's time has gone since this content started:
+    /// `run_ms` inside retro_run, `brake_sleep_ms` asleep on the audio brake, and
+    /// `run_worst_ms`, the longest single retro_run since the LAST read (reading
+    /// clears it). Cumulative otherwise, so a reader takes differences.
+    ///
+    /// The frame rate and the brake cannot tell a core that is slow from one that
+    /// is waiting: a machine parked on a link bus and a machine compiling a
+    /// shader both show a long call and an empty sink. This, read beside
+    /// Libretro::LinkCost, is what separates them.
+    godot::Dictionary GetPacingStats();
+
     /// Queue a signal emission on the owning Libretro node (main thread).
     /// Callable from the emulation thread.
     void EmitSignalOnMainThread(const godot::StringName& signal_name, const godot::Array& args);
@@ -744,6 +755,10 @@ public:
     std::atomic<double> m_declared_sample_rate{0.0};
     std::atomic<uint64_t> m_timing_revision{0};
     std::atomic<int64_t> m_dropped_frames{0};
+    /// See GetPacingStats. Written by the emulation thread, read by the main one.
+    std::atomic<uint64_t> m_run_ns{0};
+    std::atomic<uint64_t> m_run_worst_ns{0};
+    std::atomic<uint64_t> m_brake_sleep_ns{0};
     std::atomic<uint32_t> m_np_port_mask = 0x1;
     std::mutex m_np_mutex;
     std::condition_variable m_np_cv;

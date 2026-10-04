@@ -14,11 +14,14 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
 
 #include <libretro.h>
+
+#include "SinkClock.hpp"
 
 struct retro_resampler;
 
@@ -86,6 +89,23 @@ public:
     /// Falls back to measuring when nothing has been published recently, which keeps
     /// cores driving the single-sample callback behaving exactly as they did.
     double MsUntilSinkWantsFrames() const;
+
+    /// The brake for a machine on a link bus: how long until ANY sink on the wire
+    /// wants audio, this one's included. `peers` is what LinkCoordinator's
+    /// BusSinkClocks handed back; empty, this is MsUntilSinkWantsFrames.
+    ///
+    /// Machines on a bus advance together, so one asleep on its own full sink is
+    /// holding the rest still while theirs drain. The wire runs when its
+    /// neediest sink asks, not when its fullest one gets round to it.
+    ///
+    /// Bounded on this machine's side: it gives way only while it is holding less
+    /// than twice its target, which is the depth the core is told is "full". Past
+    /// that it sleeps on its own sink again, so a peer that wants audio for ever
+    /// cannot walk this one up its ring. The rate trim brings the surplus back.
+    double MsUntilBusWantsFrames(const std::vector<std::shared_ptr<SinkClock>>& peers) const;
+
+    /// This machine's sink, for the machines cabled to it. See SinkClock.
+    const std::shared_ptr<SinkClock>& Clock() const { return m_clock; }
 
     /// How full the sink is, 0-100, as a percentage of EffectiveTotalFrames.
     ///
@@ -272,13 +292,11 @@ private:
     /// Last brake the pacing loop computed. See LastBrakeMs.
     std::atomic<double> m_last_brake_ms{0.0};
 
-    /// The brake as measured just after the last push, with the steady_clock reading
-    /// it was taken at. Written on whichever thread runs the core's audio callback,
-    /// read by the pacing loop, so atomic. Time is nanoseconds since the clock epoch
-    /// because time_point is not lock-free on every ABI we build for. A zero stamp
-    /// means nothing has been published yet.
-    std::atomic<double>  m_brake_at_sample_ms{0.0};
-    std::atomic<int64_t> m_brake_sampled_at_ns{0};
+    /// The brake as measured just after the last push, with the moment it was taken.
+    /// Written on whichever thread runs the core's audio callback, read by this
+    /// machine's pacing loop and by the loop of every machine cabled to it, which
+    /// is why it is shared rather than a pair of members: see SinkClock.
+    std::shared_ptr<SinkClock> m_clock = std::make_shared<SinkClock>();
     /// The sink's own target fill, cached at Init so the brake does not pay a
     /// cross-extension call for a constant on every pass of the pacing loop.
     uint32_t m_sink_target_frames = 0;
