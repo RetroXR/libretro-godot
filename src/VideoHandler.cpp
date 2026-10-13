@@ -79,7 +79,8 @@ void VideoHandler::RefreshCallback(const void* data, uint32_t width, uint32_t he
             // False is a dropped frame, and pixel_data is then still the buffer
             // resized above, which Godot zero-fills - so uploading it would
             // black the screen for a frame. Keep the last good frame instead.
-            if (!instance->m_video_handler->m_vulkan_ctx->ReadbackToPixels(width, height, pixel_data))
+            if (!instance->m_video_handler->m_vulkan_ctx->ReadbackToPixels(width, height, pixel_data,
+                    &instance->m_video_handler->m_transfer_stats))
                 return;
         }
 #ifdef _WIN32
@@ -875,6 +876,23 @@ void VideoHandler::CreateTexture(int32_t width, int32_t height, Image::Format im
     m_texture = ImageTexture::create_from_image(m_image);
 }
 
+godot::Dictionary VideoHandler::GetTransferStats() const
+{
+    Dictionary result;
+    result["enabled"] = m_transfer_stats.enabled.load(std::memory_order_relaxed);
+    static constexpr const char* names[] = {"readback_total", "readback_wait", "readback_copy", "texture_update"};
+    for (int i = 0; i < VideoTransferStats::STAGE_COUNT; ++i)
+    {
+        const auto& counter = m_transfer_stats.stages[i];
+        Dictionary stage;
+        stage["calls"] = static_cast<int64_t>(counter.calls.load(std::memory_order_acquire));
+        stage["total_ms"] = counter.total_ns.load(std::memory_order_relaxed) / 1e6;
+        stage["max_ms"] = counter.max_ns.load(std::memory_order_relaxed) / 1e6;
+        result[names[i]] = stage;
+    }
+    return result;
+}
+
 void VideoHandler::UpdateTexture(PackedByteArray pixel_data, int32_t width, int32_t height, bool flip_y)
 {
     if (m_image.is_null())
@@ -887,6 +905,7 @@ void VideoHandler::UpdateTexture(PackedByteArray pixel_data, int32_t width, int3
     if (width != m_image->get_width() || height != m_image->get_height())
         return;
 
+    VideoTransferTimer upload_timer(&m_transfer_stats, VideoTransferStats::TEXTURE_UPDATE);
     m_image->set_data(width, height, false, m_image->get_format(), pixel_data);
     if (flip_y)
         m_image->flip_y();

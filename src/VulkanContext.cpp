@@ -1,4 +1,5 @@
 #include "VulkanContext.hpp"
+#include "VideoTransferStats.hpp"
 #include "Debug.hpp"
 #include "PixelSwizzle.hpp"
 
@@ -1258,8 +1259,9 @@ void VulkanContext::CompleteFrameWithoutReadback()
 // to a PackedByteArray.  Replaces glReadPixels for Vulkan cores.
 // ---------------------------------------------------------------------------
 
-bool VulkanContext::ReadbackToPixels(uint32_t width, uint32_t height, PackedByteArray& out)
+bool VulkanContext::ReadbackToPixels(uint32_t width, uint32_t height, PackedByteArray& out, VideoTransferStats* stats)
 {
+    VideoTransferTimer total_timer(stats, VideoTransferStats::READBACK_TOTAL);
     std::unique_lock<std::mutex> fence_lock(m_fence_mutex);
 
     // Nothing that owns the command buffer, fence or staging allocation may be
@@ -1271,7 +1273,11 @@ bool VulkanContext::ReadbackToPixels(uint32_t width, uint32_t height, PackedByte
     VkImageLayout           layout     = VK_IMAGE_LAYOUT_UNDEFINED;
     VkImageSubresourceRange range{};
     uint32_t                src_family = VK_QUEUE_FAMILY_IGNORED;
-    const bool previous_complete = WaitReadbackFenceLocked();
+    bool previous_complete;
+    {
+        VideoTransferTimer wait_timer(stats, VideoTransferStats::READBACK_WAIT);
+        previous_complete = WaitReadbackFenceLocked();
+    }
     FrameWork work = TakeFrameWork(image, format, layout, range, src_family);
     if (!previous_complete)
     {
@@ -1529,9 +1535,13 @@ bool VulkanContext::ReadbackToPixels(uint32_t width, uint32_t height, PackedByte
     // Nothing below may touch the staging buffer until the copy into it has
     // finished. On a timeout the submit is still running, so abandon the frame
     // rather than read a buffer that is still being written.
-    if (!WaitReadbackFenceLocked())
-        return false;
+    {
+        VideoTransferTimer wait_timer(stats, VideoTransferStats::READBACK_WAIT);
+        if (!WaitReadbackFenceLocked())
+            return false;
+    }
 
+    VideoTransferTimer copy_timer(stats, VideoTransferStats::READBACK_COPY);
     // ---- Map and copy to output ----
     void* mapped = nullptr;
     VkResult map_result = vkMapMemory(m_device, m_staging_mem, 0, needed, 0, &mapped);

@@ -13,6 +13,8 @@
 
 #include <libretro.h>
 #include "VulkanContext.hpp"
+#include "VideoTransferStats.hpp"
+#include <godot_cpp/variant/dictionary.hpp>
 
 namespace Xenu
 {
@@ -63,6 +65,12 @@ public:
     void SetImageFormat(godot::Image::Format format);
     void CreateTexture(int32_t width, int32_t height, godot::Image::Format image_format, godot::PackedByteArray pixel_data, bool flip_y);
     void UpdateTexture(godot::PackedByteArray pixel_data, int32_t width, int32_t height, bool flip_y);
+
+    // Cumulative CPU wall times for transfer stages. Readback wait/copy are
+    // subsets of readback_total; texture_update measures the CPU API call, not
+    // GPU upload completion. Snapshot fields may straddle an in-flight sample.
+    void SetTransferProfiling(bool enabled) { m_transfer_stats.enabled.store(enabled, std::memory_order_relaxed); }
+    godot::Dictionary GetTransferStats() const;
 
     bool SetRotation(uint32_t rotation);
     bool GetOverscan(bool* overscan);
@@ -116,6 +124,7 @@ public:
     static retro_hw_context_type GetPreferredHwRenderType();
 
 private:
+    VideoTransferStats m_transfer_stats;
     // Size of the frame the emulation thread produced last. Emulation-thread
     // state: it decides there whether a frame needs a new texture or fits the
     // existing one. The main thread must not read it to size a queued frame:

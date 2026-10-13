@@ -31,7 +31,7 @@ void VulkanContext::CompleteFrameWithoutReadback()
 }
 
 bool VulkanContext::ReadbackToPixels(uint32_t, uint32_t,
-                                     godot::PackedByteArray&)
+                                     godot::PackedByteArray&, VideoTransferStats*)
 {
     return false;
 }

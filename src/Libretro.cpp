@@ -531,6 +531,16 @@ Dictionary Libretro::GetPacingStats()
     return m_wrapper ? m_wrapper->GetPacingStats() : Dictionary();
 }
 
+void Libretro::SetVideoTransferProfiling(bool enabled)
+{
+    m_wrapper->m_video_handler->SetTransferProfiling(enabled);
+}
+
+Dictionary Libretro::GetVideoTransferStats() const
+{
+    return m_wrapper->m_video_handler->GetTransferStats();
+}
+
 void Libretro::_exit_tree()
 {
     // Synchronous, unlike StopContent(): leaving the tree means this node can be
@@ -815,6 +825,8 @@ void Libretro::_bind_methods()
     ClassDB::bind_method(D_METHOD("GetAudioBufferOccupancy"), &Libretro::GetAudioBufferOccupancy);
     ClassDB::bind_method(D_METHOD("GetAudioBrakeMs"), &Libretro::GetAudioBrakeMs);
     ClassDB::bind_method(D_METHOD("GetPacingStats"), &Libretro::GetPacingStats);
+    ClassDB::bind_method(D_METHOD("SetVideoTransferProfiling", "enabled"), &Libretro::SetVideoTransferProfiling);
+    ClassDB::bind_method(D_METHOD("GetVideoTransferStats"), &Libretro::GetVideoTransferStats);
     ClassDB::bind_method(D_METHOD("SetSramPath", "path"), &Libretro::SetSramPath);
     ClassDB::bind_method(D_METHOD("SetPackPath", "path"), &Libretro::SetPackPath);
     ClassDB::bind_method(D_METHOD("SetSramBPath", "path", "memory_id"), &Libretro::SetSramBPath,

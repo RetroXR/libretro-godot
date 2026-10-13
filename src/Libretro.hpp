@@ -490,6 +490,8 @@ public:
     double GetAudioBrakeMs() const;
     /// See Wrapper::GetPacingStats. Empty with no core.
     godot::Dictionary GetPacingStats();
+    void SetVideoTransferProfiling(bool enabled);
+    godot::Dictionary GetVideoTransferStats() const;
 
     void ConnectOptionsReady(const godot::Callable& callable, uint32_t flags = 0u);
 

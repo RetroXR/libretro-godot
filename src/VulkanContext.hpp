@@ -11,6 +11,8 @@
 namespace Xenu
 {
 
+struct VideoTransferStats;
+
 class VulkanContext
 {
 public:
@@ -41,7 +43,7 @@ public:
     /// failed, or an earlier submit is still in flight. `out` is meaningless
     /// then and must not be uploaded: the caller pre-sizes it, so its contents
     /// are uninitialized rather than merely stale.
-    [[nodiscard]] bool ReadbackToPixels(uint32_t width, uint32_t height, godot::PackedByteArray& out);
+    [[nodiscard]] bool ReadbackToPixels(uint32_t width, uint32_t height, godot::PackedByteArray& out, VideoTransferStats* stats = nullptr);
 
     retro_hw_render_interface_vulkan* GetInterface()
     {
