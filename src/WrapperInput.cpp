@@ -497,6 +497,35 @@ bool Wrapper::IsMicrophoneActive() const
     return m_microphone_handler->IsActive();
 }
 
+bool Wrapper::PushCameraFrame(const godot::PackedByteArray& rgba, uint32_t width, uint32_t height)
+{
+    return m_camera_handler->Push(rgba, width, height);
+}
+
+bool Wrapper::IsCameraActive() const
+{
+    return m_camera_handler->IsActive();
+}
+
+Vector2i Wrapper::GetCameraFrameSize() const
+{
+    unsigned width = 0;
+    unsigned height = 0;
+    m_camera_handler->FrameSize(width, height);
+    return Vector2i(static_cast<int32_t>(width), static_cast<int32_t>(height));
+}
+
+Dictionary Wrapper::GetCameraStats() const
+{
+    const CameraStream::Stats stats = m_camera_handler->Stats();
+    Dictionary out;
+    out["starts"]    = static_cast<int64_t>(stats.starts);
+    out["pushed"]    = static_cast<int64_t>(stats.pushed);
+    out["rejected"]  = static_cast<int64_t>(stats.rejected);
+    out["delivered"] = static_cast<int64_t>(stats.delivered);
+    return out;
+}
+
 void Wrapper::SetPointerState(uint32_t port, int16_t x, int16_t y, bool pressed)
 {
     if (m_input_handler && !IsNetplayPortManaged(port))

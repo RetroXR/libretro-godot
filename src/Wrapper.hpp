@@ -43,6 +43,7 @@
 #include "MessageHandler.hpp"
 #include "LogHandler.hpp"
 #include "MicrophoneHandler.hpp"
+#include "CameraHandler.hpp"
 #include "NetplayGroup.hpp"
 
 namespace Xenu
@@ -180,6 +181,15 @@ public:
     /// Host microphone frames for every microphone this core has switched on.
     void PushMicrophoneFrames(const godot::PackedVector2Array& frames, double source_rate, float gain);
     bool IsMicrophoneActive() const;
+
+    /// One picture for the core's camera (RETRO_ENVIRONMENT_GET_CAMERA_INTERFACE):
+    /// RGBA8, top row first, exactly GetCameraFrameSize(). Handed to the core on
+    /// the emulation thread before its next frame.
+    bool PushCameraFrame(const godot::PackedByteArray& rgba, uint32_t width, uint32_t height);
+    bool IsCameraActive() const;
+    godot::Vector2i GetCameraFrameSize() const;
+    /// {starts, pushed, rejected, delivered} since the content started.
+    godot::Dictionary GetCameraStats() const;
 
     /// Touch/pointer feed (RETRO_DEVICE_POINTER): x/y normalized to
     /// [-0x7FFF, 0x7FFF] across the WHOLE video output (the composite
@@ -678,6 +688,9 @@ public:
     // Lives as long as the Wrapper: a microphone handle can outlive a core run on
     // the core's own threads, and resolves through this.
     std::unique_ptr<MicrophoneHandler> m_microphone_handler = std::make_unique<MicrophoneHandler>(*this);
+    // Lives as long as the Wrapper too: the main thread pushes pictures at it
+    // whether or not a core is up, and netplay is switched on before one is.
+    std::unique_ptr<CameraHandler> m_camera_handler = std::make_unique<CameraHandler>(*this);
 
     std::thread m_thread;
     moodycamel::ReaderWriterQueue<std::unique_ptr<ThreadCommand>> m_main_thread_commands_queue;

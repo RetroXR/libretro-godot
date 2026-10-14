@@ -34,6 +34,9 @@ TESTS = {
     # Header-only, and deliberately so: the level is measured for machines whose
     # core has no microphone open at all.
     "microphone_level_test.cpp": [],
+    # Header-only: CameraHandler.cpp needs Wrapper and Godot. The channel order
+    # of a picture handed to a core is pinned nowhere else.
+    "camera_stream_test.cpp": [],
     # Header-only: the conversions are the whole unit, and VideoHandler.cpp
     # reaches Godot.
     "pixel_swizzle_test.cpp": [],

@@ -291,4 +291,18 @@ inline void Xrgb8888ToRgba8(uint8_t* dst, const void* src,
     }
 }
 
+/// RGBA8 -> XRGB8888, the padding byte filled: the way IN to a core, for a
+/// picture the frontend hands it (RETRO_CAMERA_BUFFER_RAW_FRAMEBUFFER). Strides
+/// are in bytes.
+///
+/// The same body as the way out, and not by coincidence: exchanging the first
+/// and third bytes of a pixel is its own inverse, so one conversion serves both
+/// directions and the two bodies above stay the only ones to keep equivalent.
+inline void Rgba8ToXrgb8888(void* dst, const uint8_t* src,
+                            uint32_t width, uint32_t height,
+                            size_t dst_stride, size_t src_stride)
+{
+    Xrgb8888ToRgba8(static_cast<uint8_t*>(dst), src, width, height, dst_stride, src_stride);
+}
+
 } // namespace Xenu

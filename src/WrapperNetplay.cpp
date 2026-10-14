@@ -565,6 +565,11 @@ void Wrapper::RunNetplayFrame(int64_t frame)
 {
     if (frame < m_np_power_on_frame.load(std::memory_order_relaxed))
         return;
+    // Here and not beside the audio status callback: a replay after a rewind
+    // comes through this function and skips that one, and a core that restarted
+    // its camera on a replayed frame must be holding the blank again before it
+    // runs the next, exactly as it was the first time round.
+    m_camera_handler->DeliverPending();
     m_core->retro_run();
     m_core_ran_frame = true;
 }

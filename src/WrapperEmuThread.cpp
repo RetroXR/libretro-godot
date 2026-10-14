@@ -79,6 +79,7 @@ void Wrapper::FinishTeardown()
     SetCurrentThreadWrapper(nullptr);
 
     m_microphone_handler->ReleaseAll();
+    m_camera_handler->Reset();
 
     ClearCoreIdentity();
 
@@ -158,6 +159,7 @@ void Wrapper::EmulationThreadLoop()
             m_sram_pending = godot::PackedByteArray();
             if (context_initialized)
                 m_video_handler->NotifyContextDestroy();
+            m_camera_handler->NotifyDeinitialized();
             // Each call announced BEFORE it is made: a core that will not unwind
             // (Dolphin is one) hangs inside it, and the last line says which.
             Log("Teardown: retro_unload_game...");
@@ -170,6 +172,11 @@ void Wrapper::EmulationThreadLoop()
             m_core->retro_deinit();
             Log("Teardown: retro_deinit returned");
         }
+
+        // After the last call the core can make, and on every path here, a load
+        // that failed included: a core stops its camera while it unloads, and
+        // from this line on nothing holds a pointer into it.
+        m_camera_handler->Detach();
 
         SetCurrentThreadWrapper(nullptr);
         Log("Libretro thread stopped.");
@@ -422,6 +429,8 @@ void Wrapper::EmulationThreadLoop()
         }
         game_loaded = true;
     }
+
+    m_camera_handler->NotifyInitialized();
 
     // Apply device selections made before the core started (controller/mouse
     // plugged in while the system was off). retro_set_controller_port_device is
@@ -758,6 +767,8 @@ void Wrapper::EmulationThreadLoop()
             }
 
             m_audio_handler->CallAudioBufferStatusCallback();
+            // Outside the timing below, which is the core's own cost.
+            m_camera_handler->DeliverPending();
 
             const auto run_began = std::chrono::steady_clock::now();
             m_core->retro_run();

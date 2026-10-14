@@ -101,6 +101,8 @@ void Wrapper::StartSubsystemContent(const std::string& root_directory, const std
 
     m_microphone_handler->ReleaseAll();
     m_microphone_handler->SetSuspended(false);
+    m_camera_handler->Reset();
+    m_camera_handler->SetSuspended(false);
 
     // A cartridge run owns an in-memory ROM image. Do not retain or reuse it
     // when this Wrapper is restarted with disc/full-path content.
@@ -191,6 +193,7 @@ void Wrapper::StopContent()
     if (m_audio_handler)
         m_audio_handler->SetPlaying(false);
     m_microphone_handler->SetSuspended(true);
+    m_camera_handler->SetSuspended(true);
     // Non-blocking: the join + teardown (SRAM flush, retro_unload_game,
     // retro_deinit, DLL unload) all happen off the main thread / deferred to
     // _process, so powering a system off does not hitch the frame.
@@ -202,6 +205,7 @@ bool Wrapper::ShutdownForExit(uint32_t budget_ms)
     if (m_audio_handler)
         m_audio_handler->SilenceForTeardown();
     m_microphone_handler->SetSuspended(true);
+    m_camera_handler->SetSuspended(true);
     return StopEmulationThreadBounded(budget_ms);
 }
 
@@ -237,6 +241,7 @@ void Wrapper::AbandonThread()
     if (m_audio_handler)
         m_audio_handler->SilenceForTeardown();
     m_microphone_handler->SetSuspended(true);
+    m_camera_handler->SetSuspended(true);
     // Deliberately no FinishTeardown: the handlers and the core are still in use
     // by the thread we are walking away from.
     if (m_thread.joinable())

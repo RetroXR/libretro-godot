@@ -277,6 +277,28 @@ Vector2 Libretro::MeasureMicrophoneLevel(const godot::PackedVector2Array& frames
     return Vector2(level.rms, level.peak);
 }
 
+bool Libretro::PushCameraFrame(const godot::PackedByteArray& rgba, int width, int height)
+{
+    if (!m_wrapper || width <= 0 || height <= 0)
+        return false;
+    return m_wrapper->PushCameraFrame(rgba, static_cast<uint32_t>(width), static_cast<uint32_t>(height));
+}
+
+bool Libretro::IsCameraActive() const
+{
+    return m_wrapper && m_wrapper->IsCameraActive();
+}
+
+Vector2i Libretro::GetCameraFrameSize() const
+{
+    return m_wrapper ? m_wrapper->GetCameraFrameSize() : Vector2i();
+}
+
+Dictionary Libretro::GetCameraStats() const
+{
+    return m_wrapper ? m_wrapper->GetCameraStats() : Dictionary();
+}
+
 void Libretro::SetPointerState(int port, int x, int y, bool pressed)
 {
     m_wrapper->SetPointerState(static_cast<uint32_t>(port),
@@ -797,6 +819,10 @@ void Libretro::_bind_methods()
     ClassDB::bind_method(D_METHOD("IsMicrophoneActive"), &Libretro::IsMicrophoneActive);
     ClassDB::bind_static_method("Libretro", D_METHOD("MeasureMicrophoneLevel", "frames", "source_rate", "gain"),
         &Libretro::MeasureMicrophoneLevel, DEFVAL(1.0));
+    ClassDB::bind_method(D_METHOD("PushCameraFrame", "rgba", "width", "height"), &Libretro::PushCameraFrame);
+    ClassDB::bind_method(D_METHOD("IsCameraActive"), &Libretro::IsCameraActive);
+    ClassDB::bind_method(D_METHOD("GetCameraFrameSize"), &Libretro::GetCameraFrameSize);
+    ClassDB::bind_method(D_METHOD("GetCameraStats"), &Libretro::GetCameraStats);
     ClassDB::bind_static_method("Libretro",
         D_METHOD("CoreHasExport", "root_directory", "core_name", "symbol"), &Libretro::CoreHasExport);
     ClassDB::bind_static_method("Libretro",

@@ -333,6 +333,23 @@ public:
     static godot::Vector2 MeasureMicrophoneLevel(const godot::PackedVector2Array& frames,
                                                  double source_rate, double gain = 1.0);
 
+    /// One picture for the core's camera: RGBA8 bytes, top row first, EXACTLY
+    /// GetCameraFrameSize() -- a core crops or overruns on anything else, so a
+    /// picture of another size is refused (false) rather than passed on. The core
+    /// is handed it before its next frame. False too while the machine is stopped
+    /// or in netplay, where every peer's core holds the same blank instead.
+    bool PushCameraFrame(const godot::PackedByteArray& rgba, int width, int height);
+    /// True while the core has STARTED its camera and the machine is running and
+    /// not in netplay. Asking for the interface is not starting it: mGBA asks on
+    /// every Game Boy load and starts only for a Game Boy Camera.
+    bool IsCameraActive() const;
+    /// The picture size the core asked for, (0, 0) before it has asked.
+    godot::Vector2i GetCameraFrameSize() const;
+    /// {starts, pushed, rejected, delivered} since the content started, for a
+    /// probe: `delivered` counts calls into the core, `rejected` pictures of the
+    /// wrong size.
+    godot::Dictionary GetCameraStats() const;
+
     /// Install the Wii System Menu into a Dolphin NAND through the core's own
     /// online system update (the fork's `retroxr_wii_system_update` export), so
     /// the Wii common key the install decrypts with stays inside Dolphin.
