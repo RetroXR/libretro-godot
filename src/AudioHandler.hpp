@@ -150,6 +150,17 @@ public:
     /// Main thread only, under m_sink_mutex.
     bool SetSurroundEnabled(bool on);
 
+    /// Which matrix decoder the six come out of: 0 Pro Logic II (FreeSurround's
+    /// own, the default), 1 Dolby Surround -- the first-generation decoder's one
+    /// band-limited, delayed surround from both rears. Remembered for the next
+    /// decoder and handed to the current one at once, so an amplifier's switch
+    /// takes effect mid-game. An extension too old to know modes keeps decoding
+    /// Pro Logic II.
+    ///
+    /// Main thread only, under m_sink_mutex -- the same lock PushFrames decodes
+    /// under, so a switch never lands half way through a batch.
+    void SetSurroundMode(int mode);
+
     /// Send the six decoded channels to the output device's own speakers too,
     /// through `matrix` -- 48 gains, `matrix[in * 8 + out]`, the device's FL, FR,
     /// C, LFE, back L/R, side L/R out. Empty stops it.
@@ -233,12 +244,18 @@ private:
     /// One per handler: the STFT carries state across blocks.
     godot::Ref<godot::RefCounted> m_decoder;
     uint32_t m_surround_latency = 0;
+    /// Which decoder the six come out of -- SurroundDecoder::Mode, 0 Pro Logic
+    /// II. Kept here rather than only on m_decoder, which is made fresh each time
+    /// surround is engaged and has to be told again. Under m_sink_mutex.
+    int m_surround_mode = 0;
     /// The Array of six PackedFloat32Array the decoder last returned. Held so a
     /// steady stream reuses it rather than allocating an Array a batch.
     godot::Array m_decoded;
     /// Top an empty channel voice up with silence to the front pair's depth, so
     /// all six play in step. Under m_sink_mutex. See the definition.
     void LevelSurroundVoices(godot::Object* mx);
+    /// Hand m_surround_mode to m_decoder, if there is one. Under m_sink_mutex.
+    void ApplySurroundMode();
     godot::PackedFloat32Array m_silence;
     /// Take or hand back the four extra voices. Under m_sink_mutex.
     bool AcquireSurroundVoices();

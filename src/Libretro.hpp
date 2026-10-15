@@ -257,6 +257,10 @@ public:
     /// actually engaged, which is false wherever the decoder or the voices are
     /// unavailable — the stereo path then goes on working unchanged.
     bool SetSurroundEnabled(bool on);
+    /// Which matrix decoder: 0 Pro Logic II, 1 Dolby Surround. Applies at once
+    /// while decoding and to every later engage of this run. See
+    /// AudioHandler::SetSurroundMode.
+    void SetSurroundMode(int mode);
     /// Send the decoded six to the output device's own speakers as well, through
     /// a 6 x 8 gain matrix; empty stops it. See AudioHandler::SetSurroundDiscrete.
     bool SetSurroundDiscrete(const godot::PackedFloat32Array& matrix);

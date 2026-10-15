@@ -873,11 +873,39 @@ bool AudioHandler::SetSurroundEnabled(bool on)
     // What produces LFE at all, rather than a nicety: without it the sub channel
     // is silent and the band stays in the fronts.
     m_decoder->call("set_bass_redirection", true);
+    ApplySurroundMode();
     m_surround_latency = static_cast<uint32_t>(static_cast<int>(m_decoder->call("latency_frames")));
     m_surround.store(true, std::memory_order_release);
     LogOK("Audio: surround engaged, " + std::to_string(block) + "-frame blocks, "
           + std::to_string(m_surround_latency) + " frames of latency");
     return true;
+}
+
+void AudioHandler::SetSurroundMode(int mode)
+{
+    std::lock_guard<std::recursive_mutex> lock(m_sink_mutex);
+    if (mode == m_surround_mode)
+        return;
+    m_surround_mode = mode;
+    ApplySurroundMode();
+}
+
+void AudioHandler::ApplySurroundMode()
+{
+    if (m_decoder.is_null())
+        return;
+    // Asked rather than assumed: surround-godot is found by name at run time and
+    // may predate modes, and calling a method an object lacks is an error in the
+    // log on every engage. Such a decoder simply stays on Pro Logic II.
+    if (!m_decoder->has_method("set_mode"))
+    {
+        if (m_surround_mode != 0)
+            LogWarning("Audio: the surround extension has no decoder modes; staying on Pro Logic II");
+        return;
+    }
+    m_decoder->call("set_mode", m_surround_mode);
+    LogOK(std::string("Audio: surround decoder is ")
+          + (m_surround_mode == 1 ? "Dolby Surround" : "Pro Logic II"));
 }
 
 bool AudioHandler::SetSurroundDiscrete(const PackedFloat32Array& matrix)

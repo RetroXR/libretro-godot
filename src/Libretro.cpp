@@ -170,6 +170,13 @@ bool Libretro::SetSurroundEnabled(bool on)
     return m_wrapper->m_audio_handler->SetSurroundEnabled(on);
 }
 
+void Libretro::SetSurroundMode(int mode)
+{
+    if (!m_wrapper || !m_wrapper->m_audio_handler)
+        return;
+    m_wrapper->m_audio_handler->SetSurroundMode(mode);
+}
+
 bool Libretro::SetSurroundDiscrete(const godot::PackedFloat32Array& matrix)
 {
     if (!m_wrapper || !m_wrapper->m_audio_handler)
@@ -800,6 +807,7 @@ void Libretro::_bind_methods()
     ClassDB::bind_method(D_METHOD("IsAudioReady"), &Libretro::IsAudioReady);
     ClassDB::bind_method(D_METHOD("SetAudioChannelMode", "mode"), &Libretro::SetAudioChannelMode);
     ClassDB::bind_method(D_METHOD("SetSurroundEnabled", "on"), &Libretro::SetSurroundEnabled);
+    ClassDB::bind_method(D_METHOD("SetSurroundMode", "mode"), &Libretro::SetSurroundMode);
     ClassDB::bind_method(D_METHOD("SetSurroundDiscrete", "matrix"), &Libretro::SetSurroundDiscrete);
     ClassDB::bind_method(D_METHOD("SetControllerPortDevice", "port", "device"), &Libretro::SetControllerPortDevice);
     ClassDB::bind_method(D_METHOD("SetLightgunPosition", "port", "x", "y"), &Libretro::SetLightgunPosition);
