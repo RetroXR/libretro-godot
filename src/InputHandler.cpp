@@ -647,7 +647,7 @@ int16_t InputHandler::ProcessJoypadDevice(uint32_t port, uint32_t id)
         buttons |= extra->second;
     if (id == RETRO_DEVICE_ID_JOYPAD_MASK)
         return static_cast<int16_t>(buttons);
-    return buttons & (1 << id);
+    return ButtonFromMask(buttons, id);
 }
 
 int16_t InputHandler::ProcessMouseDevice(uint32_t port, uint32_t id)

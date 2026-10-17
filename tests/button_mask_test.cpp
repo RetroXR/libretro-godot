@@ -45,6 +45,8 @@ static void TestEveryLightgunButton()
     Check(ButtonFromMask(1u << RETRO_DEVICE_ID_LIGHTGUN_RELOAD, RETRO_DEVICE_ID_LIGHTGUN_RELOAD) == 1,
           "RELOAD (id 16) held reads 1 -- the bit itself, 65536, is 0 as an int16_t");
     Check(ButtonFromMask(1u << 15, 15) == 1, "id 15 held reads 1, not -32768");
+    Check(ButtonFromMask(1u << RETRO_DEVICE_ID_JOYPAD_R3, RETRO_DEVICE_ID_JOYPAD_R3) == 1,
+          "a joypad's R3 (bit 15 of the same answer) held reads 1");
 }
 
 // ── T2: nothing else reads as held ──────────────────────────────────────────
