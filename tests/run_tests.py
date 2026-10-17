@@ -29,6 +29,8 @@ TESTS = {
     # Header-only: the encoding is the whole unit, and InputHandler.cpp is not
     # Godot-free the way LinkCoordinator.cpp deliberately is.
     "sensor_index_test.cpp": [],
+    # Header-only for the same reason: how a held button is answered.
+    "button_mask_test.cpp": [],
     # Header-only: MicrophoneHandler.cpp needs Wrapper and Godot.
     "microphone_stream_test.cpp": [],
     # Header-only, and deliberately so: the level is measured for machines whose

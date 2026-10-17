@@ -1,5 +1,6 @@
 #include "InputHandler.hpp"
 
+#include "ButtonMask.hpp"
 #include "Wrapper.hpp"
 #include "Libretro.hpp"
 #include "Debug.hpp"
@@ -669,7 +670,7 @@ int16_t InputHandler::ProcessMouseDevice(uint32_t port, uint32_t id)
     case RETRO_DEVICE_ID_MOUSE_Y:
         return m_mouse_latched_y[port];
     default:
-        return m_mouse_buttons[port] & (1 << id);
+        return ButtonFromMask(m_mouse_buttons[port], id);
     }
 }
 
@@ -691,7 +692,7 @@ int16_t InputHandler::ProcessLightgunDevice(uint32_t port, uint32_t id)
         case RETRO_DEVICE_ID_LIGHTGUN_IS_OFFSCREEN:
             return m_lightgun_is_offscreen[port];
         default:
-            return m_lightgun_buttons[port] & (1 << id);
+            return ButtonFromMask(m_lightgun_buttons[port], id);
     }
 }
 
