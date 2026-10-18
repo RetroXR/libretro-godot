@@ -207,13 +207,13 @@ bool Core::Load(CallbackTrampolines* trampolines)
     }
 
     retro_set_environment(trampolines->GetEnvironmentCallback());
+    retro_init();
+
     retro_set_video_refresh(trampolines->GetVideoRefreshCallback());
     retro_set_audio_sample(trampolines->GetAudioSampleCallback());
     retro_set_audio_sample_batch(trampolines->GetAudioSampleBatchCallback());
     retro_set_input_poll(trampolines->GetInputPollCallback());
     retro_set_input_state(trampolines->GetInputStateCallback());
-
-    retro_init();
 
     return true;
 }
