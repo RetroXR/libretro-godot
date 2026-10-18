@@ -424,7 +424,13 @@ void Wrapper::EmulationThreadLoop()
         if (!m_core->retro_load_game(&game_info))
         {
             LogError("Failed to load game");
-            NotifyContentLoadFailed("This core refused the game.");
+            // What the core said just before refusing, when it said anything: a missing
+            // BIOS or device ROM set is named there ("dl-1425.bin NOT FOUND").
+            const std::string why = m_log_handler ? m_log_handler->RecentErrors() : std::string();
+            std::string message = "This core refused the game.";
+            if (!why.empty())
+                message += "\n" + why;
+            NotifyContentLoadFailed(message.c_str());
             return;
         }
         game_loaded = true;
@@ -467,6 +473,7 @@ void Wrapper::EmulationThreadLoop()
 
     m_system_av_info = {};
     m_core->retro_get_system_av_info(&m_system_av_info);
+    m_video_handler->SetGeometry(&m_system_av_info.geometry);
 
     Log("FPS: " + std::to_string(m_system_av_info.timing.fps) + " Sample Rate: " + std::to_string(m_system_av_info.timing.sample_rate));
 
