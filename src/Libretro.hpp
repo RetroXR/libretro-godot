@@ -198,6 +198,20 @@ public:
     /// resolution, so read it per frame instead of caching it.
     godot::Ref<godot::ImageTexture> GetVideoTexture() const;
 
+    /// The shape of that picture, as a Dictionary:
+    ///   width, height  the pixels GDScript receives, AFTER the bridge's rotation
+    ///   aspect         the shape to SEE it in (width / height of the glass),
+    ///                  oriented like the pixels; 0.0 until a core has said
+    ///   rotation       RETRO_ENVIRONMENT_SET_ROTATION, 0..3
+    ///   base_width, base_height, core_aspect   the core's own words, as reported
+    /// Arcade pixels are not square, so a screen takes its shape from `aspect`,
+    /// never from width / height. See Xenu::DisplayAspect.
+    godot::Dictionary GetVideoGeometry() const;
+
+    /// Changes every time GetVideoGeometry() would answer differently. One
+    /// integer per frame is the cheap way to learn the picture changed shape.
+    int64_t GetVideoGeometrySerial() const;
+
     /// Whether the core asked for the controller display interface, which it
     /// uses to hand device screens such as a VMU's LCD over separately.
     bool HasControllerScreens() const;

@@ -105,6 +105,9 @@ public:
     godot::Ref<godot::ImageTexture> GetVideoTexture() const;
     /// The same frame CPU-side. See VideoHandler::GetImage.
     godot::Ref<godot::Image> GetVideoImage() const;
+    /// The picture's shape. See VideoHandler::GetGeometry / GetGeometrySerial.
+    VideoGeometry GetVideoGeometry() const;
+    uint32_t GetVideoGeometrySerial() const;
 
     /// Whether the core asked for the controller display interface.
     bool HasControllerScreens() const;

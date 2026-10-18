@@ -288,6 +288,16 @@ Ref<Image> Wrapper::GetVideoImage() const
     return m_video_handler ? m_video_handler->GetImage() : Ref<Image>();
 }
 
+VideoGeometry Wrapper::GetVideoGeometry() const
+{
+    return m_video_handler ? m_video_handler->GetGeometry() : VideoGeometry{};
+}
+
+uint32_t Wrapper::GetVideoGeometrySerial() const
+{
+    return m_video_handler ? m_video_handler->GetGeometrySerial() : 0u;
+}
+
 bool Wrapper::HasControllerScreens() const
 {
     return m_controller_screens_offered.load(std::memory_order_relaxed);

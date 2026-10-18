@@ -202,83 +202,16 @@ void VideoHandler::QueueFrame(Wrapper* wrapper, PackedByteArray pixel_data,
                               uint32_t width, uint32_t height, bool flip_y)
 {
     const uint32_t rotation = m_rotation & 3u;
-    uint32_t output_width = (rotation & 1u) ? height : width;
-    uint32_t output_height = (rotation & 1u) ? width : height;
+    uint32_t output_width = 0;
+    uint32_t output_height = 0;
+    RotatedSize(width, height, rotation, &output_width, &output_height);
 
     if (flip_y || rotation != 0)
     {
         PackedByteArray transformed;
         transformed.resize(static_cast<int64_t>(output_width) * output_height * 4);
-        const uint8_t* src = pixel_data.ptr();
-        uint8_t* dst = transformed.ptrw();
-
-        // Unrotated, the transform only reorders whole rows - it never moves a
-        // pixel within its row - so it is a row-order reversal rather than a
-        // per-pixel walk. Worth separating: HwFrameNeedsFlip() is true for the
-        // GL and EGL paths, so this is the case every OpenGL hardware frame
-        // takes, and a 1280x720 frame is 720 memcpys instead of 921,600 trips
-        // through the loop below.
-        if (rotation == 0)
-        {
-            const size_t row_bytes = static_cast<size_t>(width) * 4;
-            for (uint32_t y = 0; y < height; ++y)
-                memcpy(dst + static_cast<size_t>(y) * row_bytes,
-                       src + static_cast<size_t>(height - 1 - y) * row_bytes,
-                       row_bytes);
-        }
-        else
-        {
-            // A rotation genuinely gathers, so this stays a per-pixel walk. Two
-            // things it no longer does: switch on the rotation in its innermost
-            // body, where the branch was loop-invariant and blocked any widening
-            // of the copy, and move the pixel a byte at a time when it is 32 bits
-            // that are already 4-byte aligned on both sides.
-            const uint32_t* s32 = reinterpret_cast<const uint32_t*>(src);
-            uint32_t*       d32 = reinterpret_cast<uint32_t*>(dst);
-
-            for (uint32_t y = 0; y < output_height; ++y)
-            {
-                uint32_t* out_row = d32 + static_cast<size_t>(y) * output_width;
-
-                // Per row, one of the two source coordinates is fixed; only the
-                // other tracks x. Hoisted so the inner loop is a plain stride.
-                switch (rotation)
-                {
-                case 1: // 90 degrees counter-clockwise in libretro coordinates
-                {
-                    const uint32_t sx = width - 1 - y;
-                    for (uint32_t x = 0; x < output_width; ++x)
-                    {
-                        const uint32_t sy = flip_y ? height - 1 - x : x;
-                        out_row[x] = s32[static_cast<size_t>(sy) * width + sx];
-                    }
-                    break;
-                }
-                case 2:
-                {
-                    const uint32_t ry = height - 1 - y;
-                    const uint32_t sy = flip_y ? height - 1 - ry : ry;
-                    const uint32_t* in_row = s32 + static_cast<size_t>(sy) * width;
-                    for (uint32_t x = 0; x < output_width; ++x)
-                        out_row[x] = in_row[width - 1 - x];
-                    break;
-                }
-                case 3:
-                {
-                    const uint32_t sx = y;
-                    for (uint32_t x = 0; x < output_width; ++x)
-                    {
-                        const uint32_t ry = height - 1 - x;
-                        const uint32_t sy = flip_y ? height - 1 - ry : ry;
-                        out_row[x] = s32[static_cast<size_t>(sy) * width + sx];
-                    }
-                    break;
-                }
-                default:
-                    break;
-                }
-            }
-        }
+        TransformFrame(reinterpret_cast<const uint32_t*>(pixel_data.ptr()), width, height,
+                       rotation, flip_y, reinterpret_cast<uint32_t*>(transformed.ptrw()));
         pixel_data = std::move(transformed);
     }
 
@@ -288,6 +221,10 @@ void VideoHandler::QueueFrame(Wrapper* wrapper, PackedByteArray pixel_data,
     {
         m_last_width = output_width;
         m_last_height = output_height;
+        EditGeometry([&](VideoGeometry& g) {
+            g.frame_width = output_width;
+            g.frame_height = output_height;
+        });
         wrapper->CreateTexture(Image::FORMAT_RGBA8, pixel_data,
             static_cast<int32_t>(output_width), static_cast<int32_t>(output_height), false);
     }
@@ -682,7 +619,14 @@ bool VideoHandler::SetRotation(uint32_t rotation)
         return false;
     }
     m_rotation = rotation;
+    EditGeometry([&](VideoGeometry& g) { g.rotation = rotation; });
     return true;
+}
+
+VideoGeometry VideoHandler::GetGeometry() const
+{
+    std::lock_guard<std::mutex> lock(m_geometry_mutex);
+    return m_geometry;
 }
 
 bool VideoHandler::GetOverscan(bool* overscan)
@@ -742,10 +686,16 @@ bool VideoHandler::SetPixelFormat(const retro_pixel_format* pixel_format)
 
 bool VideoHandler::SetGeometry(const retro_game_geometry* geometry)
 {
-    // TODO: Handle geometry changes when not applied to a 3D model (ie. Sprite2D)
-
     if (!geometry)
         return true;
+
+    // The shape is handed up to GDScript (VideoGeometry / GetVideoGeometry), which
+    // is what a screen needs to be the right shape: the frame's pixels are not.
+    EditGeometry([&](VideoGeometry& g) {
+        g.base_width = geometry->base_width;
+        g.base_height = geometry->base_height;
+        g.core_aspect = geometry->aspect_ratio;
+    });
 
     // A core may re-report unchanged geometry repeatedly (azahar does so when the
     // R button toggles its layout), which produced an identical log each time.

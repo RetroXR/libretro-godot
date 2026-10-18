@@ -94,6 +94,25 @@ Ref<ImageTexture> Libretro::GetVideoTexture() const
     return m_wrapper ? m_wrapper->GetVideoTexture() : Ref<ImageTexture>();
 }
 
+Dictionary Libretro::GetVideoGeometry() const
+{
+    const VideoGeometry g = m_wrapper ? m_wrapper->GetVideoGeometry() : VideoGeometry{};
+    Dictionary d;
+    d["width"] = static_cast<int64_t>(g.frame_width);
+    d["height"] = static_cast<int64_t>(g.frame_height);
+    d["aspect"] = DisplayAspect(g);
+    d["rotation"] = static_cast<int64_t>(g.rotation);
+    d["base_width"] = static_cast<int64_t>(g.base_width);
+    d["base_height"] = static_cast<int64_t>(g.base_height);
+    d["core_aspect"] = g.core_aspect;
+    return d;
+}
+
+int64_t Libretro::GetVideoGeometrySerial() const
+{
+    return m_wrapper ? static_cast<int64_t>(m_wrapper->GetVideoGeometrySerial()) : 0;
+}
+
 bool Libretro::HasControllerScreens() const
 {
     return m_wrapper ? m_wrapper->HasControllerScreens() : false;
@@ -792,6 +811,8 @@ void Libretro::_bind_methods()
     ClassDB::bind_method(D_METHOD("LinkSent", "port"), &Libretro::LinkSent, DEFVAL(0u));
     ClassDB::bind_method(D_METHOD("LinkCost", "port"), &Libretro::LinkCost, DEFVAL(0u));
     ClassDB::bind_method(D_METHOD("GetVideoTexture"), &Libretro::GetVideoTexture);
+    ClassDB::bind_method(D_METHOD("GetVideoGeometry"), &Libretro::GetVideoGeometry);
+    ClassDB::bind_method(D_METHOD("GetVideoGeometrySerial"), &Libretro::GetVideoGeometrySerial);
     ClassDB::bind_method(D_METHOD("HasControllerScreens"), &Libretro::HasControllerScreens);
     ClassDB::bind_method(D_METHOD("GetControllerScreenTexture", "port", "index"), &Libretro::GetControllerScreenTexture, DEFVAL(0));
     ClassDB::bind_method(D_METHOD("GetVideoImage"), &Libretro::GetVideoImage);

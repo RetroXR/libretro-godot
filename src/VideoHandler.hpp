@@ -2,8 +2,10 @@
 
 #include <godot_cpp/classes/image_texture.hpp>
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 
 #if defined(_WIN32) || (defined(__linux__) && !defined(__ANDROID__))
 #include <SDL3/SDL_video.h>
@@ -12,6 +14,7 @@
 #endif
 
 #include <libretro.h>
+#include "VideoGeometry.hpp"
 #include "VulkanContext.hpp"
 #include "VideoTransferStats.hpp"
 #include <godot_cpp/variant/dictionary.hpp>
@@ -71,6 +74,16 @@ public:
     // GPU upload completion. Snapshot fields may straddle an in-flight sample.
     void SetTransferProfiling(bool enabled) { m_transfer_stats.enabled.store(enabled, std::memory_order_relaxed); }
     godot::Dictionary GetTransferStats() const;
+
+    /// The picture's current shape, safe to read from any thread. The emulation
+    /// thread writes it (SetGeometry, SetRotation, and each frame whose output
+    /// size changed); the main thread reads a copy. DisplayAspect() turns it
+    /// into the shape the picture is to be SEEN in.
+    VideoGeometry GetGeometry() const;
+
+    /// Bumped every time GetGeometry() would answer differently, so a screen can
+    /// ask one integer per frame and only fetch the copy when it moved.
+    uint32_t GetGeometrySerial() const { return m_geometry_serial.load(std::memory_order_acquire); }
 
     bool SetRotation(uint32_t rotation);
     bool GetOverscan(bool* overscan);
@@ -165,8 +178,32 @@ private:
     unsigned m_last_geom_h = 0;
     float    m_last_geom_aspect = 0.0f;
 
+    // Guarded by its own mutex: the writer is the emulation thread, the reader
+    // the main thread, and the struct is several fields wide.
+    mutable std::mutex m_geometry_mutex;
+    VideoGeometry m_geometry;
+    std::atomic<uint32_t> m_geometry_serial{0};
+
+    /// Apply `edit` to the geometry and bump the serial if it changed anything.
+    template <typename Edit>
+    void EditGeometry(Edit&& edit);
+
     void QueueFrame(Wrapper* wrapper, godot::PackedByteArray pixel_data,
                     uint32_t width, uint32_t height, bool flip_y);
     void DestroyHwRenderContext();
 };
+
+template <typename Edit>
+void VideoHandler::EditGeometry(Edit&& edit)
+{
+    std::lock_guard<std::mutex> lock(m_geometry_mutex);
+    const VideoGeometry before = m_geometry;
+    edit(m_geometry);
+    const VideoGeometry& g = m_geometry;
+    if (g.base_width != before.base_width || g.base_height != before.base_height ||
+        g.core_aspect != before.core_aspect || g.rotation != before.rotation ||
+        g.frame_width != before.frame_width || g.frame_height != before.frame_height)
+        m_geometry_serial.fetch_add(1, std::memory_order_release);
+}
+
 }
