@@ -91,7 +91,7 @@ typedef struct retro_link_port retro_link_port_t;
 
 /* Join the bus on `port`.
  *
- * `protocol_id` names the emulated wire protocol, e.g. "gba-sio-1". Peers
+ * `protocol_id` names the emulated wire protocol, e.g. "gba-sio". Peers
  * whose ids differ are never connected to each other, which is what allows
  * two different cores emulating two different machines to share one cable
  * while keeping unrelated cores apart.

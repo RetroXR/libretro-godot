@@ -76,7 +76,7 @@ static void TestUnbounded()
     std::printf("T1 solo endpoint runs free\n");
     auto& c = LinkCoordinator::Get();
     Wrapper* a = Fake(0x1001);
-    Check(DoAttach(c, a, 0, "gba-sio-1", GBA_HZ) != nullptr, "attach succeeds");
+    Check(DoAttach(c, a, 0, "gba-sio", GBA_HZ) != nullptr, "attach succeeds");
     Check(c.Advance(H(a, 0), 1000, 1000 + GRAIN, 1000 + GRAIN) == RETRO_LINK_UNBOUNDED,
           "advance is unbounded with no peer");
     unsigned n = 99;
@@ -92,8 +92,8 @@ static RunResult RunPair(int steps, unsigned seed, bool jitter)
     auto& c = LinkCoordinator::Get();
     Wrapper* a = Fake(0x2001);
     Wrapper* b = Fake(0x2002);
-    DoAttach(c, a, 0, "gba-sio-1", GBA_HZ);
-    DoAttach(c, b, 0, "gba-sio-1", GBA_HZ);
+    DoAttach(c, a, 0, "gba-sio", GBA_HZ);
+    DoAttach(c, b, 0, "gba-sio", GBA_HZ);
     c.Connect(a, 0, b, 0);
 
     RunResult out;
@@ -199,8 +199,8 @@ static void TestSendRecv()
     auto& c = LinkCoordinator::Get();
     Wrapper* a = Fake(0x3001);
     Wrapper* b = Fake(0x3002);
-    DoAttach(c, a, 0, "gba-sio-1", GBA_HZ);
-    DoAttach(c, b, 0, "gba-sio-1", GBA_HZ);
+    DoAttach(c, a, 0, "gba-sio", GBA_HZ);
+    DoAttach(c, b, 0, "gba-sio", GBA_HZ);
     c.Connect(a, 0, b, 0);
 
     // Both publish once so the bus knows where each machine starts.
@@ -262,8 +262,8 @@ static void TestRecvOrdering()
     auto& c = LinkCoordinator::Get();
     Wrapper* a = Fake(0x4001);
     Wrapper* b = Fake(0x4002);
-    DoAttach(c, a, 0, "gba-sio-1", GBA_HZ);
-    DoAttach(c, b, 0, "gba-sio-1", GBA_HZ);
+    DoAttach(c, a, 0, "gba-sio", GBA_HZ);
+    DoAttach(c, b, 0, "gba-sio", GBA_HZ);
     c.Connect(a, 0, b, 0);
     SetCurrent(a);
     c.Advance(H(a, 0), 0, GRAIN, 0);
@@ -344,8 +344,8 @@ static void TestTeardownReleases()
     auto& c = LinkCoordinator::Get();
     Wrapper* a = Fake(0x6001);
     Wrapper* b = Fake(0x6002);
-    DoAttach(c, a, 0, "gba-sio-1", GBA_HZ);
-    DoAttach(c, b, 0, "gba-sio-1", GBA_HZ);
+    DoAttach(c, a, 0, "gba-sio", GBA_HZ);
+    DoAttach(c, b, 0, "gba-sio", GBA_HZ);
     c.Connect(a, 0, b, 0);
 
     // B publishes a horizon, then stops for good. A will park behind it.
@@ -381,8 +381,8 @@ static void TestPullingOneEndFreesBoth()
     auto& c = LinkCoordinator::Get();
     Wrapper* a = Fake(0x7001);
     Wrapper* b = Fake(0x7002);
-    DoAttach(c, a, 0, "gba-sio-1", GBA_HZ);
-    DoAttach(c, b, 0, "gba-sio-1", GBA_HZ);
+    DoAttach(c, a, 0, "gba-sio", GBA_HZ);
+    DoAttach(c, b, 0, "gba-sio", GBA_HZ);
     c.Connect(a, 0, b, 0);
 
     unsigned n = 0;
@@ -419,7 +419,7 @@ static void TestChain()
     Wrapper* e = Fake(0x8004);
     for (Wrapper* w : {a, b, d, e})
     {
-        DoAttach(c, w, 0, "gba-sio-1", GBA_HZ);
+        DoAttach(c, w, 0, "gba-sio", GBA_HZ);
     }
 
     // The room reports which machines share one wire, as edges. A GBA chain does
@@ -480,8 +480,8 @@ static void TestSeating()
     // how long it had known them, and an endpoint is created when its CORE
     // attaches, so the console powered on first became player one and the cable
     // had no say at all.
-    DoAttach(c, grey, 0, "gba-sio-1", GBA_HZ);
-    DoAttach(c, purple, 0, "gba-sio-1", GBA_HZ);
+    DoAttach(c, grey, 0, "gba-sio", GBA_HZ);
+    DoAttach(c, purple, 0, "gba-sio", GBA_HZ);
 
     // The room names the machine holding the PURPLE connector first, because it
     // walks the lead from its purple end. On hardware that is the unit whose SI
@@ -525,8 +525,8 @@ static void TestJoiningDoesNotFreezeThePlayers()
     Wrapper* a = Fake(0x9001);
     Wrapper* b = Fake(0x9002);
     Wrapper* d = Fake(0x9003);
-    DoAttach(c, a, 0, "gba-sio-1", GBA_HZ);
-    DoAttach(c, b, 0, "gba-sio-1", GBA_HZ);
+    DoAttach(c, a, 0, "gba-sio", GBA_HZ);
+    DoAttach(c, b, 0, "gba-sio", GBA_HZ);
     c.Connect(a, 0, b, 0);
 
     // Both have been playing for a while, which is the whole point of the case:
@@ -555,7 +555,7 @@ static void TestJoiningDoesNotFreezeThePlayers()
 
     // The third handheld is cabled onto the same wire, the way the room does
     // it: one ConnectGroup naming the whole party in seat order.
-    DoAttach(c, d, 0, "gba-sio-1", GBA_HZ);
+    DoAttach(c, d, 0, "gba-sio", GBA_HZ);
     Check(c.ConnectGroup({{a, 0}, {b, 0}, {d, 0}}), "the third machine is cabled in");
 
     // And now everyone says where they are. The newcomer is at nought, because
@@ -601,14 +601,14 @@ static void TestLateAttachProtocolMismatch()
     Wrapper* b = Fake(0xA002);
 
     Check(c.Connect(a, 0, b, 0), "the cable can be seated before either core attaches");
-    Check(DoAttach(c, a, 0, "gb-sio-1", GBA_HZ) != nullptr,
+    Check(DoAttach(c, a, 0, "gb-sio", GBA_HZ) != nullptr,
           "the first protocol claims the wire");
     Check(DoAttach(c, b, 0, "gc-gba-1", GBA_HZ) == nullptr,
           "a later incompatible attachment is refused");
     unsigned n = 0;
     Check(c.Peers(H(a, 0), &n) == 0 && n == 1,
           "the rejected endpoint is not reported as a live peer");
-    Check(DoAttach(c, b, 0, "gb-sio-1", GBA_HZ) != nullptr,
+    Check(DoAttach(c, b, 0, "gb-sio", GBA_HZ) != nullptr,
           "the matching protocol can still attach afterwards");
     Check(c.Peers(H(a, 0), &n) == 0 && n == 2,
           "both compatible endpoints are then live");
@@ -625,8 +625,8 @@ static void TestProtocolMismatchIsNonDestructive()
     Wrapper* a = Fake(0xB001);
     Wrapper* b = Fake(0xB002);
     Wrapper* alien = Fake(0xB003);
-    DoAttach(c, a, 0, "gb-sio-1", GBA_HZ);
-    DoAttach(c, b, 0, "gb-sio-1", GBA_HZ);
+    DoAttach(c, a, 0, "gb-sio", GBA_HZ);
+    DoAttach(c, b, 0, "gb-sio", GBA_HZ);
     DoAttach(c, alien, 0, "gc-gba-1", GBA_HZ);
     Check(c.Connect(a, 0, b, 0), "a compatible pair starts connected");
     Check(!c.ConnectGroup({{a, 0}, {b, 0}, {alien, 0}}),
@@ -647,8 +647,8 @@ static void TestSnapshotRoundTrip()
     auto& c = LinkCoordinator::Get();
     Wrapper* a = Fake(0xC001);
     Wrapper* b = Fake(0xC002);
-    DoAttach(c, a, 0, "gba-sio-1", GBA_HZ);
-    DoAttach(c, b, 0, "gba-sio-1", GBA_HZ);
+    DoAttach(c, a, 0, "gba-sio", GBA_HZ);
+    DoAttach(c, b, 0, "gba-sio", GBA_HZ);
     c.ConnectGroup({{a, 0}, {b, 0}});
     SetCurrent(a); c.Advance(H(a, 0), 100, 300, 0);
     SetCurrent(b); c.Advance(H(b, 0), 200, 400, 0);
@@ -666,8 +666,8 @@ static void TestSnapshotRoundTrip()
 
     Wrapper* joined_a = Fake(0xC101);
     Wrapper* joined_b = Fake(0xC102);
-    DoAttach(c, joined_a, 0, "gba-sio-1", GBA_HZ);
-    DoAttach(c, joined_b, 0, "gba-sio-1", GBA_HZ);
+    DoAttach(c, joined_a, 0, "gba-sio", GBA_HZ);
+    DoAttach(c, joined_b, 0, "gba-sio", GBA_HZ);
     c.ConnectGroup({{joined_a, 0}, {joined_b, 0}});
     Check(c.RestoreGroup({{joined_a, 0}, {joined_b, 0}}, saved),
           "the snapshot restores onto replacement cores");
@@ -714,7 +714,7 @@ static void TestBootedApartAlign()
     c.Connect(a, 0, b, 0);
 
     // A is switched on and runs for a while with nobody to talk to.
-    DoAttach(c, a, 0, "gba-sio-1", GBA_HZ);
+    DoAttach(c, a, 0, "gba-sio", GBA_HZ);
     SetCurrent(a);
     const uint64_t GAP = 1000000;
     for (uint64_t t = 0; t <= GAP; t += GRAIN)
@@ -723,7 +723,7 @@ static void TestBootedApartAlign()
     }
 
     // B is switched on now, and its clock starts where every core's does.
-    DoAttach(c, b, 0, "gba-sio-1", GBA_HZ);
+    DoAttach(c, b, 0, "gba-sio", GBA_HZ);
     SetCurrent(b);
     c.Advance(H(b, 0), 0, GRAIN, 0);
     SetCurrent(a);
@@ -765,8 +765,8 @@ static void TestMessageWake()
     auto& c = LinkCoordinator::Get();
     Wrapper* a = Fake(0x3501);
     Wrapper* b = Fake(0x3502);
-    DoAttach(c, a, 0, "gba-sio-1", GBA_HZ);
-    DoAttach(c, b, 0, "gba-sio-1", GBA_HZ);
+    DoAttach(c, a, 0, "gba-sio", GBA_HZ);
+    DoAttach(c, b, 0, "gba-sio", GBA_HZ);
     c.Connect(a, 0, b, 0);
 
     uint32_t wake = 0;
@@ -805,8 +805,8 @@ static void TestFutureMessageKeepsBarrier()
     auto& c = LinkCoordinator::Get();
     Wrapper* a = Fake(0x3601);
     Wrapper* b = Fake(0x3602);
-    DoAttach(c, a, 0, "psx-sio-1", GBA_HZ);
-    DoAttach(c, b, 0, "psx-sio-1", GBA_HZ);
+    DoAttach(c, a, 0, "psx-sio", GBA_HZ);
+    DoAttach(c, b, 0, "psx-sio", GBA_HZ);
     c.Connect(a, 0, b, 0);
 
     uint32_t wake = 0;

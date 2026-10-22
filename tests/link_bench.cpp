@@ -102,7 +102,7 @@ static Result RunParty(unsigned machines, uint64_t cycles, uint64_t work_ns)
         Wrapper* w = Fake(0x9000 + i);
         owners.push_back(w);
         Xenu::g_bench_current = w;
-        handles[i] = c.Attach(w, 0, "gba-sio-1", GBA_HZ);
+        handles[i] = c.Attach(w, 0, "gba-sio", GBA_HZ);
         ports.push_back({w, 0});
     }
     Xenu::g_bench_current = nullptr;
