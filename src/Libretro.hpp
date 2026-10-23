@@ -247,6 +247,8 @@ public:
 
     /// Returns per-port controller info as Array[Dictionary{port, controllers: Array[{name,id}], current_id}].
     godot::Array GetControllerInfo();
+    /// The core's input labels (SET_INPUT_DESCRIPTORS) as Array[Dictionary{port, device, index, id, description}].
+    godot::Array GetInputDescriptors();
     /// Meta XR Audio voice ids this core's sound is spatialized through, or
     /// empty when it is running on the fallback AudioStreamPlayer3D.
     godot::PackedInt32Array GetAudioVoiceIds();

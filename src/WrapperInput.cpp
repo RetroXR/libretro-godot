@@ -294,6 +294,25 @@ godot::Array Wrapper::GetControllerInfo() const
     return result;
 }
 
+godot::Array Wrapper::GetInputDescriptors() const
+{
+    Array result;
+    if (!m_input_handler)
+        return result;
+
+    for (const auto& d : m_input_handler->GetInputDescriptors())
+    {
+        Dictionary entry;
+        entry["port"]        = static_cast<int>(d.port);
+        entry["device"]      = static_cast<int>(d.device);
+        entry["index"]       = static_cast<int>(d.index);
+        entry["id"]          = static_cast<int>(d.id);
+        entry["description"] = String::utf8(d.description.c_str());
+        result.append(entry);
+    }
+    return result;
+}
+
 void Wrapper::SetControllerPortDevice(uint32_t port, uint32_t device)
 {
     // Always remember the selection: a controller/mouse plugged in while the

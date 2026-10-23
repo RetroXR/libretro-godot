@@ -513,6 +513,12 @@ std::vector<std::vector<InputHandler::RetroController>> InputHandler::GetControl
     return m_controllers;
 }
 
+std::vector<InputHandler::RetroDevice> InputHandler::GetInputDescriptors() const
+{
+    std::lock_guard<std::recursive_mutex> lock(m_state_mutex);
+    return m_devices;
+}
+
 void InputHandler::SetPortDevice(uint32_t port, uint32_t device)
 {
     std::lock_guard<std::recursive_mutex> lock(m_state_mutex);

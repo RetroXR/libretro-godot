@@ -170,6 +170,9 @@ public:
     bool IsGyroEnabled(uint32_t port) const;
 
     std::vector<std::vector<RetroController>> GetControllers() const;
+    /// What the core said each of its inputs is, from SET_INPUT_DESCRIPTORS
+    /// (a copy: the core sets it on the emulation thread).
+    std::vector<RetroDevice> GetInputDescriptors() const;
     /// Track which device type is active on each port (defaults to RETRO_DEVICE_JOYPAD).
     void SetPortDevice(uint32_t port, uint32_t device);
     uint32_t GetPortDevice(uint32_t port) const;

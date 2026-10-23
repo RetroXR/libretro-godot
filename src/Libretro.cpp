@@ -208,6 +208,11 @@ godot::Array Libretro::GetControllerInfo()
     return m_wrapper->GetControllerInfo();
 }
 
+godot::Array Libretro::GetInputDescriptors()
+{
+    return m_wrapper ? m_wrapper->GetInputDescriptors() : godot::Array();
+}
+
 void Libretro::SetControllerPortDevice(int port, int device)
 {
     m_wrapper->SetControllerPortDevice(static_cast<uint32_t>(port), static_cast<uint32_t>(device));
@@ -823,6 +828,7 @@ void Libretro::_bind_methods()
     ClassDB::bind_static_method("Libretro", D_METHOD("SetPreferredHwRender", "context_type"), &Libretro::SetPreferredHwRender);
     ClassDB::bind_static_method("Libretro", D_METHOD("SetNoContentPassesNull", "passes_null"), &Libretro::SetNoContentPassesNull);
     ClassDB::bind_method(D_METHOD("GetControllerInfo"), &Libretro::GetControllerInfo);
+    ClassDB::bind_method(D_METHOD("GetInputDescriptors"), &Libretro::GetInputDescriptors);
     ClassDB::bind_method(D_METHOD("GetAudioVoiceIds"), &Libretro::GetAudioVoiceIds);
     ClassDB::bind_method(D_METHOD("GetControllerAudioVoiceId", "port", "index"), &Libretro::GetControllerAudioVoiceId, DEFVAL(0));
     ClassDB::bind_method(D_METHOD("IsAudioReady"), &Libretro::IsAudioReady);

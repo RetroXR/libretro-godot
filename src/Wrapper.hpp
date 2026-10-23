@@ -133,6 +133,10 @@ public:
     /// [{name, id}], indexed by port number. Consumed by Libretro::GetControllerInfo().
     godot::Array GetControllerInfo() const;
 
+    /// The core's SET_INPUT_DESCRIPTORS as [{port, device, index, id, description}].
+    /// Empty until the core has published them (they arrive during load).
+    godot::Array GetInputDescriptors() const;
+
     /// Tell the running core which device type is active on a given port.
     /// Calls retro_set_controller_port_device and updates the local tracking map.
     void SetControllerPortDevice(uint32_t port, uint32_t device);
