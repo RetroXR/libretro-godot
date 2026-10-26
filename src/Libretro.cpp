@@ -554,6 +554,11 @@ Dictionary Libretro::GetCoreIdentity() const
     return m_wrapper ? m_wrapper->GetCoreIdentity() : Dictionary();
 }
 
+Dictionary Libretro::GetCoreDebugInfo() const
+{
+    return m_wrapper ? m_wrapper->GetCoreDebugInfo() : Dictionary();
+}
+
 double Libretro::GetDeclaredFps() const
 {
     return m_wrapper->GetDeclaredFps();
@@ -878,6 +883,7 @@ void Libretro::_bind_methods()
     ClassDB::bind_method(D_METHOD("SetNetplayCrcFromState", "from_state"), &Libretro::SetNetplayCrcFromState);
     ClassDB::bind_method(D_METHOD("GetFrameCount"), &Libretro::GetFrameCount);
     ClassDB::bind_method(D_METHOD("GetCoreIdentity"), &Libretro::GetCoreIdentity);
+    ClassDB::bind_method(D_METHOD("GetCoreDebugInfo"), &Libretro::GetCoreDebugInfo);
     ClassDB::bind_method(D_METHOD("GetNetplayRollbackCount"), &Libretro::GetNetplayRollbackCount);
     ClassDB::bind_method(D_METHOD("GetNetplayRollbackStats"), &Libretro::GetNetplayRollbackStats);
     ClassDB::bind_method(D_METHOD("GetDeclaredFps"), &Libretro::GetDeclaredFps);

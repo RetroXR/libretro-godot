@@ -766,6 +766,8 @@ bool VideoHandler::SetHwRender(retro_hw_render_callback* hw_render_callback)
     m_context_reset = hw_render_callback->context_reset;
     m_context_destroy = hw_render_callback->context_destroy;
     m_hw_context_type = hw_render_callback->context_type;
+    m_hw_version_major = hw_render_callback->version_major;
+    m_hw_version_minor = hw_render_callback->version_minor;
 
     hw_render_callback->get_current_framebuffer = VideoHandler::HwRenderGetCurrentFramebuffer;
     hw_render_callback->get_proc_address = VideoHandler::HwRenderGetProcAddress;
@@ -788,6 +790,7 @@ bool VideoHandler::SetSharedContext() const
     case RETRO_HW_CONTEXT_OPENGLES3:
     case RETRO_HW_CONTEXT_OPENGLES_VERSION:
         Log("Shared context granted for context type: " + std::to_string(m_hw_context_type));
+        m_shared_context_granted = true;
         return true;
     default:
         return false;

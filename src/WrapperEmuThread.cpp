@@ -560,6 +560,7 @@ void Wrapper::EmulationThreadLoop()
     // has reported ready. The savestate size is the dangerous one and follows
     // the first frame instead.
     PublishCoreIdentity();
+    RefreshCoreDebug();
 
     auto last_time = std::chrono::steady_clock::now();
     double accumulator = 0.0;
@@ -786,9 +787,16 @@ void Wrapper::EmulationThreadLoop()
                 m_run_ns.fetch_add(run_ns, std::memory_order_relaxed);
                 if (run_ns > m_run_worst_ns.load(std::memory_order_relaxed))
                     m_run_worst_ns.store(run_ns, std::memory_order_relaxed);
+                if (run_ns > m_core_debug_worst_ns.load(std::memory_order_relaxed))
+                    m_core_debug_worst_ns.store(run_ns, std::memory_order_relaxed);
             }
             m_core_ran_frame = true;
             m_frame_counter.fetch_add(1, std::memory_order_relaxed);
+            // The Debug tab's snapshot, about once a second. Cheap (a few getters
+            // into the core), and here because most of what it reads is this
+            // thread's to read.
+            if (std::chrono::steady_clock::now() - m_core_debug_at > std::chrono::seconds(1))
+                RefreshCoreDebug();
 
             // Achievements. Emulation thread, strictly after the frame the core
             // just produced, and only ever on a frame that is final; the rollback

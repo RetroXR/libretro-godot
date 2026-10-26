@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <map>
 #include <array>
 #include <bitset>
 #include <mutex>
@@ -184,6 +185,26 @@ private:
     // and callbacks from core-created threads all share this state. Recursive
     // locking lets Process* helpers reuse the public getters safely.
     mutable std::recursive_mutex m_state_mutex;
+
+public:
+    // For the debug snapshot.
+    size_t GetInputDescriptorCount() const
+    {
+        std::lock_guard<std::recursive_mutex> lock(m_state_mutex);
+        return m_devices.size();
+    }
+    size_t GetControllerInfoPorts() const
+    {
+        std::lock_guard<std::recursive_mutex> lock(m_state_mutex);
+        return m_controllers.size();
+    }
+    std::map<uint32_t, uint32_t> GetPortDevices() const
+    {
+        std::lock_guard<std::recursive_mutex> lock(m_state_mutex);
+        return std::map<uint32_t, uint32_t>(m_port_devices.begin(), m_port_devices.end());
+    }
+
+private:
 
     std::unordered_map<uint32_t, uint16_t> m_joypad_buttons;
     // Not in NetplayState: cleared when netplay starts, refused on its ports.

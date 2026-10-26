@@ -91,6 +91,7 @@ bool OptionsHandler::SetVariable(const retro_variable* variable)
 // only filling m_variables leaves the UI showing "no options".
 bool OptionsHandler::SetVariables(const retro_variable* variables)
 {
+    m_options_api = 0;
     m_categories.clear();
     m_definitions.clear();
     m_variables.clear();
@@ -142,6 +143,7 @@ bool OptionsHandler::SetVariableUpdate(bool update)
 // m_variables alone leaves the options panel empty for v1 cores.
 bool OptionsHandler::SetCoreOptions(const retro_core_option_definition* definitions)
 {
+    m_options_api = 1;
     m_categories.clear();
     m_definitions.clear();
     m_variables.clear();
@@ -190,6 +192,7 @@ bool OptionsHandler::SetCoreOptions(const retro_core_options_intl* options_intl)
 
 bool OptionsHandler::SetCoreOptionsV2(const retro_core_options_v2* options)
 {
+    m_options_api = 2;
     m_categories.clear();
     m_definitions.clear();
     m_variables.clear();

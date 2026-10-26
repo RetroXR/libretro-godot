@@ -495,6 +495,147 @@ void Wrapper::PublishCoreSerializeSize()
     m_core_serialize_size = serialize_size;
 }
 
+void Wrapper::ClearCoreDebug()
+{
+    std::lock_guard<std::mutex> lock(m_core_debug_mutex);
+    m_core_debug = CoreDebugInfo{};
+    m_core_debug_at = {};
+    m_core_debug_run_ns = 0;
+    m_core_debug_frames = 0;
+    m_core_debug_worst_ns.store(0, std::memory_order_relaxed);
+}
+
+void Wrapper::RefreshCoreDebug()
+{
+    if (!m_core)
+        return;
+    CoreDebugInfo d;
+    d.ready = true;
+    if (m_video_handler)
+    {
+        d.pixel_format = static_cast<int>(m_video_handler->GetPixelFormat());
+        d.hw_context = static_cast<int>(m_video_handler->GetHwContextType());
+        d.hw_major = m_video_handler->GetHwVersionMajor();
+        d.hw_minor = m_video_handler->GetHwVersionMinor();
+        d.shared_context = m_video_handler->GetSharedContextGranted();
+    }
+    if (m_core->retro_get_system_av_info)
+    {
+        retro_system_av_info av = {};
+        m_core->retro_get_system_av_info(&av);
+        d.max_width = av.geometry.max_width;
+        d.max_height = av.geometry.max_height;
+        d.av_fps = av.timing.fps;
+        d.av_sample_rate = av.timing.sample_rate;
+    }
+    if (m_core->retro_get_system_info)
+    {
+        retro_system_info info = {};
+        m_core->retro_get_system_info(&info);
+        d.valid_extensions = info.valid_extensions ? info.valid_extensions : "";
+        d.need_fullpath = info.need_fullpath;
+        d.block_extract = info.block_extract;
+    }
+    if (m_environment_handler)
+    {
+        d.performance_level = m_environment_handler->GetPerformanceLevel();
+        d.disk_kind = m_environment_handler->GetDiskControlKind();
+        m_environment_handler->GetDiskImages(d.disk_count, d.disk_index);
+        for (const auto& s : m_environment_handler->GetSubsystems())
+            d.subsystems.push_back(s.desc.empty() ? s.ident : s.desc);
+    }
+    if (m_options_handler)
+        d.options_api = m_options_handler->GetOptionsApi();
+    d.supports_achievements = m_supports_achievements;
+    d.memory_descriptors = m_memory_descriptors.size();
+    if (m_core->retro_get_memory_size)
+    {
+        d.save_ram = static_cast<int64_t>(m_core->retro_get_memory_size(RETRO_MEMORY_SAVE_RAM));
+        d.rtc = static_cast<int64_t>(m_core->retro_get_memory_size(RETRO_MEMORY_RTC));
+        d.system_ram = static_cast<int64_t>(m_core->retro_get_memory_size(RETRO_MEMORY_SYSTEM_RAM));
+        d.video_ram = static_cast<int64_t>(m_core->retro_get_memory_size(RETRO_MEMORY_VIDEO_RAM));
+    }
+    if (m_input_handler)
+    {
+        d.input_descriptors = m_input_handler->GetInputDescriptorCount();
+        d.controller_info_ports = m_input_handler->GetControllerInfoPorts();
+        d.port_devices = m_input_handler->GetPortDevices();
+    }
+    if (m_audio_handler)
+    {
+        d.audio_status_callback = m_audio_handler->HasBufferStatusCallback();
+        d.min_audio_latency_ms = m_audio_handler->GetMinimumAudioLatency();
+    }
+
+    // Frame time over the window since the last refresh, from the running totals.
+    const uint64_t run_ns = m_run_ns.load(std::memory_order_relaxed);
+    const int64_t frames = m_frame_counter.load(std::memory_order_relaxed);
+    if (frames > m_core_debug_frames && run_ns >= m_core_debug_run_ns)
+        d.run_avg_ms = static_cast<double>(run_ns - m_core_debug_run_ns) / 1.0e6
+            / static_cast<double>(frames - m_core_debug_frames);
+    d.run_worst_ms = static_cast<double>(
+        m_core_debug_worst_ns.exchange(0, std::memory_order_relaxed)) / 1.0e6;
+    m_core_debug_run_ns = run_ns;
+    m_core_debug_frames = frames;
+    m_core_debug_at = std::chrono::steady_clock::now();
+
+    std::lock_guard<std::mutex> lock(m_core_debug_mutex);
+    // Keep the last window's figures until a window with frames replaces them.
+    if (d.run_avg_ms <= 0.0)
+    {
+        d.run_avg_ms = m_core_debug.run_avg_ms;
+        d.run_worst_ms = std::max(d.run_worst_ms, m_core_debug.run_worst_ms);
+    }
+    m_core_debug = std::move(d);
+}
+
+godot::Dictionary Wrapper::GetCoreDebugInfo() const
+{
+    godot::Dictionary out;
+    std::lock_guard<std::mutex> lock(m_core_debug_mutex);
+    const CoreDebugInfo& d = m_core_debug;
+    if (!d.ready)
+        return out;
+    out["pixel_format"] = d.pixel_format;
+    out["hw_context"] = d.hw_context;
+    out["hw_version_major"] = static_cast<int64_t>(d.hw_major);
+    out["hw_version_minor"] = static_cast<int64_t>(d.hw_minor);
+    out["shared_context"] = d.shared_context;
+    out["max_width"] = static_cast<int64_t>(d.max_width);
+    out["max_height"] = static_cast<int64_t>(d.max_height);
+    out["av_fps"] = d.av_fps;
+    out["av_sample_rate"] = d.av_sample_rate;
+    out["valid_extensions"] = godot::String::utf8(d.valid_extensions.c_str());
+    out["need_fullpath"] = d.need_fullpath;
+    out["block_extract"] = d.block_extract;
+    out["performance_level"] = static_cast<int64_t>(d.performance_level);
+    out["options_api"] = d.options_api;
+    out["supports_achievements"] = d.supports_achievements;
+    out["memory_descriptors"] = static_cast<int64_t>(d.memory_descriptors);
+    out["save_ram"] = d.save_ram;
+    out["rtc"] = d.rtc;
+    out["system_ram"] = d.system_ram;
+    out["video_ram"] = d.video_ram;
+    out["disk_control"] = d.disk_kind;
+    out["disk_count"] = static_cast<int64_t>(d.disk_count);
+    out["disk_index"] = static_cast<int64_t>(d.disk_index);
+    godot::PackedStringArray subsystems;
+    for (const auto& s : d.subsystems)
+        subsystems.push_back(godot::String::utf8(s.c_str()));
+    out["subsystems"] = subsystems;
+    out["input_descriptors"] = static_cast<int64_t>(d.input_descriptors);
+    out["controller_info_ports"] = static_cast<int64_t>(d.controller_info_ports);
+    godot::Dictionary ports;
+    for (const auto& [port, device] : d.port_devices)
+        ports[static_cast<int64_t>(port)] = static_cast<int64_t>(device);
+    out["port_devices"] = ports;
+    out["audio_status_callback"] = d.audio_status_callback;
+    out["min_audio_latency_ms"] = static_cast<int64_t>(d.min_audio_latency_ms);
+    out["run_avg_ms"] = d.run_avg_ms;
+    out["run_worst_ms"] = d.run_worst_ms;
+    return out;
+}
+
 void Wrapper::ClearCoreIdentity()
 {
     std::lock_guard<std::mutex> lock(m_core_identity_mutex);
@@ -505,6 +646,7 @@ void Wrapper::ClearCoreIdentity()
     m_core_identity_ready = false;
     m_core_serialize_size_published = false;
     m_core_ran_frame = false;
+    ClearCoreDebug();
 }
 
 godot::Dictionary Wrapper::GetCoreIdentity() const

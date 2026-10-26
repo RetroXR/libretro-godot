@@ -107,6 +107,10 @@ public:
     /// This machine's sink, for the machines cabled to it. See SinkClock.
     const std::shared_ptr<SinkClock>& Clock() const { return m_clock; }
 
+    // For the debug snapshot.
+    bool HasBufferStatusCallback() const { return m_audio_buffer_status_callback != nullptr; }
+    uint32_t GetMinimumAudioLatency() const { return m_minimum_audio_latency; }
+
     /// How full the sink is, 0-100, as a percentage of EffectiveTotalFrames.
     ///
     /// This is the same figure the core is handed every frame through the buffer

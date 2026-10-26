@@ -80,6 +80,36 @@ public:
 
     const std::vector<SubsystemInfo>& GetSubsystems() const { return m_subsystems; }
 
+    // For the debug snapshot, emulation thread only (the disk callbacks are the
+    // core's and must not be called from anywhere else).
+    uint32_t GetPerformanceLevel() const { return m_performance_level; }
+    /// 0 no disk control, 1 the original interface, 2 the extended one.
+    int GetDiskControlKind() const
+    {
+        if (m_disk_control_ext_callback.get_num_images)
+            return 2;
+        return m_disk_control_callback.get_num_images ? 1 : 0;
+    }
+    /// Images and the one inserted; false without disk control.
+    bool GetDiskImages(unsigned& count, unsigned& index) const
+    {
+        if (m_disk_control_ext_callback.get_num_images)
+        {
+            count = m_disk_control_ext_callback.get_num_images();
+            index = m_disk_control_ext_callback.get_image_index
+                ? m_disk_control_ext_callback.get_image_index() : 0;
+            return true;
+        }
+        if (m_disk_control_callback.get_num_images)
+        {
+            count = m_disk_control_callback.get_num_images();
+            index = m_disk_control_callback.get_image_index
+                ? m_disk_control_callback.get_image_index() : 0;
+            return true;
+        }
+        return false;
+    }
+
     // Resolve a published ident ("ndd", "gb_link", ...). Null when the core has
     // no such subsystem, which is how a stale or mistyped catalog entry surfaces.
     const SubsystemInfo* FindSubsystem(const std::string& ident) const;

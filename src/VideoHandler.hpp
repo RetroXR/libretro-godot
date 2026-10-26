@@ -100,6 +100,13 @@ public:
     /// else and is not offered. Asked after SetHwRender, so the type is known.
     bool SetSharedContext() const;
 
+    // For the debug snapshot, read on the emulation thread that writes them.
+    retro_pixel_format GetPixelFormat() const { return m_pixel_format; }
+    retro_hw_context_type GetHwContextType() const { return m_hw_context_type; }
+    unsigned GetHwVersionMajor() const { return m_hw_version_major; }
+    unsigned GetHwVersionMinor() const { return m_hw_version_minor; }
+    bool GetSharedContextGranted() const { return m_shared_context_granted; }
+
     /// Invoke the core's context_destroy callback. Must run on the emulation
     /// thread before retro_unload_game (RetroArch's ordering), since Vulkan cores
     /// like paraLLEl-RDP free all their VkDevice objects only in this callback.
@@ -170,6 +177,11 @@ private:
     retro_pixel_format m_pixel_format = RETRO_PIXEL_FORMAT_0RGB1555;
     retro_hw_context_reset_t m_context_destroy = nullptr;
     retro_hw_context_type m_hw_context_type = RETRO_HW_CONTEXT_NONE;
+    unsigned m_hw_version_major = 0;
+    unsigned m_hw_version_minor = 0;
+    /// SetSharedContext is const (the env call reads no state) but the answer
+    /// is worth reporting, so the flag it leaves is mutable.
+    mutable bool m_shared_context_granted = false;
     bool m_context_active = false;
 
     // Last geometry seen by SetGeometry, so a core that re-reports the SAME

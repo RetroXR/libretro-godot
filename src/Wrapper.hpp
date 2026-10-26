@@ -492,6 +492,12 @@ public:
 
     int64_t GetFrameCount() const { return m_frame_counter.load(std::memory_order_relaxed); }
 
+    /// What the core declared about itself and what it is doing, for the
+    /// machine menu's Debug tab. A copy of a snapshot the emulation thread takes
+    /// at load and about once a second after: most of these values are written
+    /// on that thread, and reading them live from the main one is a race.
+    godot::Dictionary GetCoreDebugInfo() const;
+
     /// How many rewind+replay corrections have happened (diagnostics/HUD).
     int64_t GetNetplayRollbackCount() const { return m_np_rollback_count.load(std::memory_order_relaxed); }
 
@@ -749,6 +755,54 @@ public:
     std::mutex m_pending_options_mutex;
     std::vector<std::pair<std::string, std::string>> m_pending_core_options;
     void ApplyPendingCoreOptions();
+
+    /// See GetCoreDebugInfo. Plain values only, converted on the main thread.
+    struct CoreDebugInfo
+    {
+        bool ready = false;
+        int pixel_format = -1;
+        int hw_context = 0;
+        unsigned hw_major = 0;
+        unsigned hw_minor = 0;
+        bool shared_context = false;
+        unsigned max_width = 0;
+        unsigned max_height = 0;
+        double av_fps = 0.0;
+        double av_sample_rate = 0.0;
+        std::string valid_extensions;
+        bool need_fullpath = false;
+        bool block_extract = false;
+        uint32_t performance_level = 0;
+        int options_api = -1;
+        bool supports_achievements = true;
+        size_t memory_descriptors = 0;
+        int64_t save_ram = 0;
+        int64_t rtc = 0;
+        int64_t system_ram = 0;
+        int64_t video_ram = 0;
+        int disk_kind = 0;
+        unsigned disk_count = 0;
+        unsigned disk_index = 0;
+        std::vector<std::string> subsystems;
+        size_t input_descriptors = 0;
+        size_t controller_info_ports = 0;
+        std::map<uint32_t, uint32_t> port_devices;
+        bool audio_status_callback = false;
+        uint32_t min_audio_latency_ms = 0;
+        double run_avg_ms = 0.0;
+        double run_worst_ms = 0.0;
+    };
+    mutable std::mutex m_core_debug_mutex;
+    CoreDebugInfo m_core_debug;
+    /// Emulation thread only: the window the frame-time figures cover.
+    std::chrono::steady_clock::time_point m_core_debug_at{};
+    uint64_t m_core_debug_run_ns = 0;
+    int64_t m_core_debug_frames = 0;
+    /// Its OWN worst, not m_run_worst_ns: GetPacingStats zeroes that one when it
+    /// is read, and pace_trace depends on seeing it.
+    std::atomic<uint64_t> m_core_debug_worst_ns{0};
+    void RefreshCoreDebug();
+    void ClearCoreDebug();
 
     mutable std::mutex m_core_identity_mutex;
     std::string m_core_library_name;
