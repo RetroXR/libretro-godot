@@ -218,6 +218,10 @@ public:
     /// The screen of device `index` on controller `port` -- for a Dreamcast, the
     /// card in expansion slot `index` -- or null until the core has pushed one.
     godot::Ref<godot::ImageTexture> GetControllerScreenTexture(int port, int index);
+    /// Any device screen, through the device display interface: `location` 0 is a
+    /// controller (`index` its slot), 1 a memory card slot (a PocketStation, `index`
+    /// 0). Null until the core has pushed one.
+    godot::Ref<godot::ImageTexture> GetDeviceScreenTexture(int location, int port, int index);
 
     /// The same frame as a CPU-side Image — the buffer the texture was uploaded
     /// FROM, so reading it costs no GPU readback. A savestate thumbnail wants

@@ -9,6 +9,7 @@
 
 #include "ControllerAudioInterface.hpp"
 #include "ControllerDisplayInterface.hpp"
+#include "DeviceDisplayInterface.hpp"
 #include "LinkInterface.hpp"
 #include "TransferPakInterface.hpp"
 
@@ -153,5 +154,6 @@ private:
     bool GetTransferPakInterface(retro_transfer_pak_interface* iface, Wrapper* instance);
     bool GetControllerAudioInterface(retro_controller_audio_interface* iface, Wrapper* instance);
     bool GetControllerDisplayInterface(retro_controller_display_interface* iface, Wrapper* instance);
+    bool GetDeviceDisplayInterface(retro_device_display_interface* iface, Wrapper* instance);
 };
 }

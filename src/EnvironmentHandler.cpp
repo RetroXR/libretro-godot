@@ -156,6 +156,8 @@ static bool runloop_clear_all_thread_waits(uint32_t clear_threads, void* data)
     X(RETRO_ENVIRONMENT_GET_CONTROLLER_AUDIO_INTERFACE) \
     X(RETRO_ENVIRONMENT_GET_CONTROLLER_AUDIO_INTERFACE_FINAL) \
     X(RETRO_ENVIRONMENT_GET_CONTROLLER_DISPLAY_INTERFACE) \
+    X(RETRO_ENVIRONMENT_GET_DEVICE_DISPLAY_INTERFACE) \
+    X(RETRO_ENVIRONMENT_GET_DEVICE_DISPLAY_INTERFACE_FINAL) \
     X(RETRO_ENVIRONMENT_GET_PLAYLIST_DIRECTORY) \
     X(RETRO_ENVIRONMENT_GET_FILE_BROWSER_START_DIRECTORY) \
     X(RETRO_ENVIRONMENT_RETROARCH_START_BLOCK) \
@@ -369,6 +371,8 @@ bool EnvironmentHandler::Callback(uint32_t cmd, void* data)
     case RETRO_ENVIRONMENT_GET_CONTROLLER_AUDIO_INTERFACE:
     case RETRO_ENVIRONMENT_GET_CONTROLLER_AUDIO_INTERFACE_FINAL:                 return instance->m_environment_handler->GetControllerAudioInterface(static_cast<retro_controller_audio_interface*>(data), instance);
     case RETRO_ENVIRONMENT_GET_CONTROLLER_DISPLAY_INTERFACE:                     return instance->m_environment_handler->GetControllerDisplayInterface(static_cast<retro_controller_display_interface*>(data), instance);
+    case RETRO_ENVIRONMENT_GET_DEVICE_DISPLAY_INTERFACE:
+    case RETRO_ENVIRONMENT_GET_DEVICE_DISPLAY_INTERFACE_FINAL:                   return instance->m_environment_handler->GetDeviceDisplayInterface(static_cast<retro_device_display_interface*>(data), instance);
     case RETRO_ENVIRONMENT_GET_PLAYLIST_DIRECTORY:                              return EnvironmentNotImplemented(cmd);
     case RETRO_ENVIRONMENT_GET_FILE_BROWSER_START_DIRECTORY:                    return EnvironmentNotImplemented(cmd);
     // custom environment commands
@@ -905,11 +909,19 @@ bool ControllerAudioPushTrampoline(void* frontend_data, unsigned port, unsigned 
     return instance->m_audio_handler->PushControllerFrames(port, index, data, frames);
 }
 
-// Any thread; the wrapper copies under its own lock.
+// Any thread; the wrapper copies under its own lock. The old call names a screen
+// on a controller only, which is the device interface's CONTROLLER location.
 bool ControllerDisplayRefreshTrampoline(void* frontend_data, unsigned port, unsigned index,
                                         const uint32_t* pixels, unsigned width, unsigned height)
 {
-    return static_cast<Wrapper*>(frontend_data)->StoreControllerScreen(port, index, pixels, width, height);
+    return static_cast<Wrapper*>(frontend_data)->StoreDeviceScreen(RETRO_DEVICE_DISPLAY_CONTROLLER,
+        port, index, pixels, width, height);
+}
+
+bool DeviceDisplayRefreshTrampoline(void* frontend_data, unsigned location, unsigned port, unsigned index,
+                                    const uint32_t* pixels, unsigned width, unsigned height)
+{
+    return static_cast<Wrapper*>(frontend_data)->StoreDeviceScreen(location, port, index, pixels, width, height);
 }
 }
 
@@ -933,6 +945,20 @@ bool EnvironmentHandler::GetControllerDisplayInterface(retro_controller_display_
     iface->frontend_data     = instance;
     iface->refresh           = &ControllerDisplayRefreshTrampoline;
     instance->NoteControllerScreensOffered();
+    return true;
+}
+
+bool EnvironmentHandler::GetDeviceDisplayInterface(retro_device_display_interface* iface, Wrapper* instance)
+{
+    if (!iface || !instance)
+        return false;
+
+    iface->interface_version = RETRO_DEVICE_DISPLAY_INTERFACE_VERSION;
+    iface->frontend_data     = instance;
+    iface->refresh           = &DeviceDisplayRefreshTrampoline;
+    instance->NoteControllerScreensOffered();
+    Log("Device display interface: handed to the core (version "
+        + std::to_string(RETRO_DEVICE_DISPLAY_INTERFACE_VERSION) + ")");
     return true;
 }
 }

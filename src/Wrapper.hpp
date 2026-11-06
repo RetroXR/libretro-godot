@@ -114,9 +114,13 @@ public:
     /// The screen of device `index` on controller `port`, or null until the core
     /// has pushed one. MAIN THREAD: it builds a texture.
     godot::Ref<godot::ImageTexture> GetControllerScreenTexture(int port, int index);
-    /// retro_controller_display_interface.refresh. Any thread.
-    bool StoreControllerScreen(unsigned port, unsigned index, const uint32_t* pixels,
-                               unsigned width, unsigned height);
+    /// The same for any device screen: `location` is a retro_device_display_location
+    /// (0 a controller, 1 a memory card slot). MAIN THREAD.
+    godot::Ref<godot::ImageTexture> GetDeviceScreenTexture(int location, int port, int index);
+    /// retro_device_display_interface.refresh, and the old controller call as
+    /// location CONTROLLER. Any thread.
+    bool StoreDeviceScreen(unsigned location, unsigned port, unsigned index, const uint32_t* pixels,
+                           unsigned width, unsigned height);
     /// Called when the core takes the interface, at every content start.
     void NoteControllerScreensOffered();
     /// Whether the core's sound is heard at all. Used to be a side effect of

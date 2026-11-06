@@ -316,12 +316,19 @@ void Wrapper::NoteControllerScreensOffered()
     m_controller_screens_offered.store(true, std::memory_order_relaxed);
 }
 
-bool Wrapper::StoreControllerScreen(unsigned port, unsigned index, const uint32_t* pixels,
-                                    unsigned width, unsigned height)
+// One key per screen: the location in the top 16 bits, then the port, then the index.
+static uint64_t DeviceScreenKey(unsigned location, unsigned port, unsigned index)
+{
+    return (static_cast<uint64_t>(location & 0xffffu) << 48)
+        | (static_cast<uint64_t>(port & 0xffffu) << 32) | index;
+}
+
+bool Wrapper::StoreDeviceScreen(unsigned location, unsigned port, unsigned index, const uint32_t* pixels,
+                                unsigned width, unsigned height)
 {
     if (!pixels || width == 0 || height == 0 || width > 4096 || height > 4096)
         return false;
-    const uint64_t key = (static_cast<uint64_t>(port) << 32) | index;
+    const uint64_t key = DeviceScreenKey(location, port, index);
     std::lock_guard<std::mutex> lock(m_controller_screen_mutex);
     ControllerScreen& screen = m_controller_screens[key];
     screen.width = width;
@@ -333,9 +340,15 @@ bool Wrapper::StoreControllerScreen(unsigned port, unsigned index, const uint32_
 
 Ref<ImageTexture> Wrapper::GetControllerScreenTexture(int port, int index)
 {
-    if (port < 0 || index < 0)
+    return GetDeviceScreenTexture(RETRO_DEVICE_DISPLAY_CONTROLLER, port, index);
+}
+
+Ref<ImageTexture> Wrapper::GetDeviceScreenTexture(int location, int port, int index)
+{
+    if (location < 0 || port < 0 || index < 0)
         return Ref<ImageTexture>();
-    const uint64_t key = (static_cast<uint64_t>(port) << 32) | static_cast<uint32_t>(index);
+    const uint64_t key = DeviceScreenKey(static_cast<unsigned>(location), static_cast<unsigned>(port),
+        static_cast<unsigned>(index));
 
     PackedByteArray bytes;
     unsigned width = 0;

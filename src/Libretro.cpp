@@ -123,6 +123,11 @@ Ref<ImageTexture> Libretro::GetControllerScreenTexture(int port, int index)
     return m_wrapper ? m_wrapper->GetControllerScreenTexture(port, index) : Ref<ImageTexture>();
 }
 
+Ref<ImageTexture> Libretro::GetDeviceScreenTexture(int location, int port, int index)
+{
+    return m_wrapper ? m_wrapper->GetDeviceScreenTexture(location, port, index) : Ref<ImageTexture>();
+}
+
 Ref<Image> Libretro::GetVideoImage() const
 {
     return m_wrapper ? m_wrapper->GetVideoImage() : Ref<Image>();
@@ -825,6 +830,7 @@ void Libretro::_bind_methods()
     ClassDB::bind_method(D_METHOD("GetVideoGeometrySerial"), &Libretro::GetVideoGeometrySerial);
     ClassDB::bind_method(D_METHOD("HasControllerScreens"), &Libretro::HasControllerScreens);
     ClassDB::bind_method(D_METHOD("GetControllerScreenTexture", "port", "index"), &Libretro::GetControllerScreenTexture, DEFVAL(0));
+    ClassDB::bind_method(D_METHOD("GetDeviceScreenTexture", "location", "port", "index"), &Libretro::GetDeviceScreenTexture, DEFVAL(0));
     ClassDB::bind_method(D_METHOD("GetVideoImage"), &Libretro::GetVideoImage);
     ClassDB::bind_method(D_METHOD("SetAudioPlaying", "playing"), &Libretro::SetAudioPlaying);
     ClassDB::bind_method(D_METHOD("SetCoreOption", "key", "value"), &Libretro::SetCoreOption);
