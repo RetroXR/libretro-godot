@@ -1013,7 +1013,9 @@ public:
 
     std::string m_root_directory;
     std::string m_temp_directory;
-    std::string m_username = "DefaultUser";
+    // GetUsername() as it stood when this run was started; GET_USERNAME hands
+    // the core this string's buffer, so it must not change mid-run.
+    std::string m_username = "Player";
     retro_log_level m_log_level = RETRO_LOG_WARN;
 
     std::string m_game_path;
@@ -1071,6 +1073,18 @@ public:
     /// emulation thread up, exactly like SetPreferredHwRender.
     static void SetNoContentPassesNull(bool passes_null);
     static bool GetNoContentPassesNull();
+
+    /// What GET_USERNAME answers: the player's name, which a core may show or
+    /// send (PPSSPP's PSP nickname, melonDS's firmware name, netplay). Written
+    /// from GDScript; each run takes its own copy as it starts (m_username), so
+    /// the pointer the core is handed stays valid for the whole run.
+    static void SetUsername(const std::string& username);
+    static std::string GetUsername();
+
+    /// What GET_LANGUAGE answers, a retro_language. Read whenever a core asks,
+    /// by a run or by PeekCoreOptions; out-of-range values read as English.
+    static void SetLanguage(unsigned language);
+    static unsigned GetLanguage();
 
     uint64_t m_libretro_node_id = 0;
 

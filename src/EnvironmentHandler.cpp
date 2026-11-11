@@ -618,7 +618,7 @@ bool EnvironmentHandler::GetUsername(const char** username) const
 bool EnvironmentHandler::GetLanguage(retro_language* language) const
 {
     if (language)
-        *language = RETRO_LANGUAGE_ENGLISH;
+        *language = static_cast<retro_language>(Wrapper::GetLanguage());
     return true;
 }
 

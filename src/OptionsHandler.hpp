@@ -80,6 +80,14 @@ private:
     void DeserializeFromFile();
     void ReapplyFrontendValues();
 
+    // Lay a translation (the intl forms' `local`) over the English tables just
+    // declared. A translation is usually partial -- it may leave out options,
+    // values, or any single string as NULL -- so only the strings it does carry
+    // replace English ones, matched by option key, value and category key.
+    // Keys, values and defaults always come from `us`.
+    void OverlayLocal(const retro_core_option_definition* local);
+    void OverlayLocal(const retro_core_options_v2* local);
+
     // Every value the frontend has set, declared or not. A core may declare its
     // options more than once, and only while loading the game (fbneo builds its
     // list per game inside retro_load_game and reads it straight away); each

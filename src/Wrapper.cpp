@@ -98,6 +98,7 @@ void Wrapper::StartSubsystemContent(const std::string& root_directory, const std
     StopEmulationThread();
 
     m_no_content_passes_null = GetNoContentPassesNull();
+    m_username = GetUsername();
 
     m_microphone_handler->ReleaseAll();
     m_microphone_handler->SetSuspended(false);
@@ -276,6 +277,38 @@ void Wrapper::SetNoContentPassesNull(bool passes_null)
 bool Wrapper::GetNoContentPassesNull()
 {
     return g_no_content_passes_null.load(std::memory_order_relaxed);
+}
+
+namespace
+{
+// The player's name and language, written from GDScript, read as a run starts
+// (the name) or whenever a core asks (the language).
+std::mutex g_username_mutex;
+std::string g_username = "Player";
+std::atomic<unsigned> g_language{ RETRO_LANGUAGE_ENGLISH };
+}
+
+void Wrapper::SetUsername(const std::string& username)
+{
+    std::lock_guard lock(g_username_mutex);
+    g_username = username.empty() ? std::string("Player") : username;
+}
+
+std::string Wrapper::GetUsername()
+{
+    std::lock_guard lock(g_username_mutex);
+    return g_username;
+}
+
+void Wrapper::SetLanguage(unsigned language)
+{
+    g_language.store(language < RETRO_LANGUAGE_LAST ? language : RETRO_LANGUAGE_ENGLISH,
+                     std::memory_order_relaxed);
+}
+
+unsigned Wrapper::GetLanguage()
+{
+    return g_language.load(std::memory_order_relaxed);
 }
 
 Ref<ImageTexture> Wrapper::GetVideoTexture() const

@@ -8,6 +8,7 @@
 
 #include "Debug.hpp"
 #include "DynLib.hpp"
+#include "Wrapper.hpp"
 
 namespace Xenu
 {
@@ -103,7 +104,7 @@ bool PeekEnvironment(unsigned cmd, void* data)
 
     case RETRO_ENVIRONMENT_GET_LANGUAGE:
         if (data)
-            *static_cast<unsigned*>(data) = RETRO_LANGUAGE_ENGLISH;
+            *static_cast<unsigned*>(data) = Wrapper::GetLanguage();
         return true;
 
     default:

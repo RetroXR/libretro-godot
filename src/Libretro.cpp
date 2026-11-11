@@ -154,6 +154,16 @@ void Libretro::SetNoContentPassesNull(bool passes_null)
     Wrapper::SetNoContentPassesNull(passes_null);
 }
 
+void Libretro::SetUsername(const godot::String& username)
+{
+    Wrapper::SetUsername(username.utf8().get_data());
+}
+
+void Libretro::SetLanguage(int language)
+{
+    Wrapper::SetLanguage(language < 0 ? 0u : static_cast<unsigned>(language));
+}
+
 void Libretro::SetPreferredHwRender(int context_type)
 {
     VideoHandler::SetPreferredHwRender(static_cast<retro_hw_context_type>(context_type));
@@ -838,6 +848,8 @@ void Libretro::_bind_methods()
     ClassDB::bind_method(D_METHOD("SetInputEnabled", "enabled"), &Libretro::SetInputEnabled);
     ClassDB::bind_static_method("Libretro", D_METHOD("SetPreferredHwRender", "context_type"), &Libretro::SetPreferredHwRender);
     ClassDB::bind_static_method("Libretro", D_METHOD("SetNoContentPassesNull", "passes_null"), &Libretro::SetNoContentPassesNull);
+    ClassDB::bind_static_method("Libretro", D_METHOD("SetUsername", "username"), &Libretro::SetUsername);
+    ClassDB::bind_static_method("Libretro", D_METHOD("SetLanguage", "language"), &Libretro::SetLanguage);
     ClassDB::bind_method(D_METHOD("GetControllerInfo"), &Libretro::GetControllerInfo);
     ClassDB::bind_method(D_METHOD("GetInputDescriptors"), &Libretro::GetInputDescriptors);
     ClassDB::bind_method(D_METHOD("GetAudioVoiceIds"), &Libretro::GetAudioVoiceIds);

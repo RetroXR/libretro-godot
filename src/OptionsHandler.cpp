@@ -187,7 +187,72 @@ bool OptionsHandler::SetCoreOptions(const retro_core_options_intl* options_intl)
 {
     if (!options_intl)
         return SetCoreOptions(static_cast<const retro_core_option_definition*>(nullptr));
-    return SetCoreOptions(options_intl->local ? options_intl->local : options_intl->us);
+    if (!options_intl->us)
+        return SetCoreOptions(options_intl->local);
+    // English first, then the translation over it: `local` alone dropped every
+    // option a partial translation leaves out.
+    const bool ok = SetCoreOptions(options_intl->us);
+    OverlayLocal(options_intl->local);
+    return ok;
+}
+
+namespace
+{
+void OverlayValues(std::vector<OptionValue>& values, const retro_core_option_value* local_values)
+{
+    for (auto local = local_values; local && local->value; ++local)
+    {
+        if (!local->label)
+            continue;
+        for (OptionValue& value : values)
+            if (value.value == local->value)
+                value.label = local->label;
+    }
+}
+
+void OverlayString(std::string& target, const char* local)
+{
+    if (local && *local)
+        target = local;
+}
+}
+
+void OptionsHandler::OverlayLocal(const retro_core_option_definition* local)
+{
+    for (auto definition = local; definition && definition->key; ++definition)
+    {
+        auto it = m_definitions.find(definition->key);
+        if (it == m_definitions.end())
+            continue;
+        OverlayString(it->second.desc, definition->desc);
+        OverlayString(it->second.info, definition->info);
+        OverlayValues(it->second.values, definition->values);
+    }
+}
+
+void OptionsHandler::OverlayLocal(const retro_core_options_v2* local)
+{
+    if (!local)
+        return;
+    for (auto category = local->categories; category && category->key; ++category)
+    {
+        auto it = m_categories.find(category->key);
+        if (it == m_categories.end())
+            continue;
+        OverlayString(it->second.desc, category->desc);
+        OverlayString(it->second.info, category->info);
+    }
+    for (auto definition = local->definitions; definition && definition->key; ++definition)
+    {
+        auto it = m_definitions.find(definition->key);
+        if (it == m_definitions.end())
+            continue;
+        OverlayString(it->second.desc, definition->desc);
+        OverlayString(it->second.desc_categorized, definition->desc_categorized);
+        OverlayString(it->second.info, definition->info);
+        OverlayString(it->second.info_categorized, definition->info_categorized);
+        OverlayValues(it->second.values, definition->values);
+    }
 }
 
 bool OptionsHandler::SetCoreOptionsV2(const retro_core_options_v2* options)
@@ -247,7 +312,11 @@ bool OptionsHandler::SetCoreOptionsV2Intl(const retro_core_options_v2_intl* opti
 {
     if (!options)
         return SetCoreOptionsV2(nullptr);
-    return SetCoreOptionsV2(options->local ? options->local : options->us);
+    if (!options->us)
+        return SetCoreOptionsV2(options->local);
+    const bool ok = SetCoreOptionsV2(options->us);
+    OverlayLocal(options->local);
+    return ok;
 }
 
 bool OptionsHandler::SetCoreOptionsUpdateDisplayCallback(const retro_core_options_update_display_callback* update_display_callback)

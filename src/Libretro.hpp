@@ -248,6 +248,14 @@ public:
     /// Must be set before StartContent; it is read as the core loads.
     static void SetNoContentPassesNull(bool passes_null);
 
+    /// The player's name GET_USERNAME answers ("" = "Player"). Each run copies
+    /// it as it starts, so set it before StartContent.
+    static void SetUsername(const godot::String& username);
+
+    /// The retro_language GET_LANGUAGE answers (0 = English), for runs and for
+    /// PeekCoreOptions alike. Out-of-range values read as English.
+    static void SetLanguage(int language);
+
 
     /// Returns per-port controller info as Array[Dictionary{port, controllers: Array[{name,id}], current_id}].
     godot::Array GetControllerInfo();
