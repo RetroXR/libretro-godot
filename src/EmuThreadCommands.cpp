@@ -175,6 +175,44 @@ void EmuThreadCommandSetDiskEjected::Abandon(Wrapper& wrapper)
     wrapper.AnswerNoDiskInfo();
 }
 
+void EmuThreadCommandAccessoryReaders::Execute(Wrapper& wrapper)
+{
+    wrapper.EmitAccessoryReaders();
+}
+
+void EmuThreadCommandAccessoryReaders::Abandon(Wrapper& wrapper)
+{
+    wrapper.EmitSignalOnMainThread("accessory_readers_changed", godot::Array::make(godot::Array()));
+}
+
+void EmuThreadCommandAccessoryMedia::Execute(Wrapper& wrapper)
+{
+    bool ok = false;
+    if (wrapper.m_environment_handler)
+    {
+        ok = m_insert ? wrapper.m_environment_handler->InsertAccessoryMedia(m_reader, m_path)
+                      : wrapper.m_environment_handler->RemoveAccessoryMedia(m_reader);
+        if (m_insert)
+        {
+            if (ok)
+                LogOK("Accessory media: " + m_path + " on reader " + std::to_string(m_reader));
+            else
+                LogWarning("Accessory media: reader " + std::to_string(m_reader) + " refused " + m_path);
+        }
+        else
+            Log("Accessory media: reader " + std::to_string(m_reader) + (ok ? " emptied" : " could not be emptied"));
+    }
+    wrapper.AnswerAccessoryMediaDone(m_reader, m_insert, ok);
+    wrapper.EmitAccessoryReaders();
+}
+
+void EmuThreadCommandAccessoryMedia::Abandon(Wrapper& wrapper)
+{
+    LogWarning("Accessory media: reader " + std::to_string(m_reader) + " -- the core stopped before "
+        + (m_insert ? "taking " + m_path : std::string("the medium was removed")));
+    wrapper.AnswerAccessoryMediaDone(m_reader, m_insert, false);
+}
+
 void EmuThreadCommandReplaceDisk::Execute(Wrapper& wrapper)
 {
     if (wrapper.m_environment_handler)

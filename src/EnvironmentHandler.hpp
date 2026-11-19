@@ -7,6 +7,7 @@
 
 #include <libretro.h>
 
+#include "AccessoryMediaInterface.hpp"
 #include "ControllerAudioInterface.hpp"
 #include "ControllerDisplayInterface.hpp"
 #include "DeviceDisplayInterface.hpp"
@@ -38,6 +39,24 @@ public:
     bool SetDiskEjected(bool ejected);
     bool SetDiskImageIndex(uint32_t index);
     bool ReplaceDiskImage(uint32_t index, const std::string& path);
+
+    // Accessory media (AccessoryMediaInterface.hpp): the readers a core says it
+    // has -- an amiibo's NFC reader, an e-Reader's card slot -- and the calls
+    // that hand one a medium or take it away. EMULATION THREAD ONLY, like disk
+    // control: the core publishes from its own calls and the frontend's
+    // requests arrive as emulation-thread commands, so the table needs no lock.
+    struct AccessoryReader
+    {
+        unsigned kind = 0;
+        unsigned port = 0;
+        unsigned flags = 0;
+        std::string name;
+    };
+    const std::vector<AccessoryReader>& GetAccessoryReaders() const { return m_accessory_readers; }
+    bool InsertAccessoryMedia(unsigned reader, const std::string& path);
+    bool RemoveAccessoryMedia(unsigned reader);
+    /// 1 a medium is on it, 0 none, -1 the core cannot tell.
+    int AccessoryMediaPresent(unsigned reader) const;
 
     // Subsystems: multi-file content a core loads as one unit -- an N64
     // cartridge together with its 64DD disk, a pair of linked Game Boys, a
@@ -129,6 +148,8 @@ private:
     retro_vfs_interface m_vfs_interface;
     retro_disk_control_callback m_disk_control_callback = {};
     retro_disk_control_ext_callback m_disk_control_ext_callback = {};
+    retro_accessory_media_interface m_accessory_media = {};
+    std::vector<AccessoryReader> m_accessory_readers;
 
     bool SetPerformanceLevel(uint32_t* level);
     bool GetSystemDirectory(const char** directory);
@@ -155,5 +176,6 @@ private:
     bool GetControllerAudioInterface(retro_controller_audio_interface* iface, Wrapper* instance);
     bool GetControllerDisplayInterface(retro_controller_display_interface* iface, Wrapper* instance);
     bool GetDeviceDisplayInterface(retro_device_display_interface* iface, Wrapper* instance);
+    bool SetAccessoryMediaInterface(const retro_accessory_media_interface* iface, Wrapper* instance);
 };
 }

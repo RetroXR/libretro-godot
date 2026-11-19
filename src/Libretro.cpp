@@ -526,6 +526,21 @@ void Libretro::ReplaceDiskImage(int64_t index, const godot::String& path)
     m_wrapper->ReplaceDiskImage(static_cast<uint32_t>(index < 0 ? 0 : index), path);
 }
 
+void Libretro::RequestAccessoryReaders()
+{
+    m_wrapper->RequestAccessoryReaders();
+}
+
+void Libretro::InsertAccessoryMedia(int64_t reader, const godot::String& path)
+{
+    m_wrapper->InsertAccessoryMedia(static_cast<uint32_t>(reader < 0 ? UINT32_MAX : reader), path);
+}
+
+void Libretro::RemoveAccessoryMedia(int64_t reader)
+{
+    m_wrapper->RemoveAccessoryMedia(static_cast<uint32_t>(reader < 0 ? UINT32_MAX : reader));
+}
+
 void Libretro::ScheduleDiscOp(int64_t frame, int64_t op, int64_t index, const godot::String& path)
 {
     m_wrapper->ScheduleDiscOp(frame, static_cast<int32_t>(op),
@@ -936,6 +951,9 @@ void Libretro::_bind_methods()
     ClassDB::bind_method(D_METHOD("RequestDiskInfo"), &Libretro::RequestDiskInfo);
     ClassDB::bind_method(D_METHOD("SetDiskEjectState", "ejected"), &Libretro::SetDiskEjectState);
     ClassDB::bind_method(D_METHOD("ReplaceDiskImage", "index", "path"), &Libretro::ReplaceDiskImage);
+    ClassDB::bind_method(D_METHOD("RequestAccessoryReaders"), &Libretro::RequestAccessoryReaders);
+    ClassDB::bind_method(D_METHOD("InsertAccessoryMedia", "reader", "path"), &Libretro::InsertAccessoryMedia);
+    ClassDB::bind_method(D_METHOD("RemoveAccessoryMedia", "reader"), &Libretro::RemoveAccessoryMedia);
     ClassDB::bind_method(D_METHOD("ScheduleDiscOp", "frame", "op", "index", "path"), &Libretro::ScheduleDiscOp);
     ClassDB::bind_method(D_METHOD("ScheduleLinkOp", "frame", "op", "others", "ports"), &Libretro::ScheduleLinkOp);
     ClassDB::bind_method(D_METHOD("RaClaimSession", "console_id"), &Libretro::RaClaimSession);
@@ -950,6 +968,12 @@ void Libretro::_bind_methods()
         PropertyInfo(Variant::INT, "count"),
         PropertyInfo(Variant::INT, "current_index"),
         PropertyInfo(Variant::BOOL, "ejected")));
+    ADD_SIGNAL(MethodInfo("accessory_readers_changed",
+        PropertyInfo(Variant::ARRAY, "readers")));
+    ADD_SIGNAL(MethodInfo("accessory_media_done",
+        PropertyInfo(Variant::INT, "reader"),
+        PropertyInfo(Variant::BOOL, "inserted"),
+        PropertyInfo(Variant::BOOL, "ok")));
     ADD_SIGNAL(MethodInfo("netplay_crc",
         PropertyInfo(Variant::INT, "frame"),
         PropertyInfo(Variant::INT, "crc")));

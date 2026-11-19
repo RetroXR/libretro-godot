@@ -189,6 +189,35 @@ private:
     bool m_ejected;
 };
 
+/// Read the core's accessory media readers and emit accessory_readers_changed.
+class EmuThreadCommandAccessoryReaders : public EmuThreadCommand
+{
+public:
+    void Execute(Wrapper& wrapper) override;
+    void Abandon(Wrapper& wrapper) override;
+};
+
+/// Put a medium on an accessory reader (inserted) or take it off, then emit
+/// accessory_media_done and the readers.
+class EmuThreadCommandAccessoryMedia : public EmuThreadCommand
+{
+public:
+    EmuThreadCommandAccessoryMedia(uint32_t reader, bool insert, std::string path)
+        : m_reader(reader)
+        , m_insert(insert)
+        , m_path(std::move(path))
+    {
+    }
+
+    void Execute(Wrapper& wrapper) override;
+    void Abandon(Wrapper& wrapper) override;
+
+private:
+    uint32_t m_reader;
+    bool m_insert;
+    std::string m_path;
+};
+
 /// Hand the core a brand-new disc file at image `index`
 /// (replace_image_index, RetroArch's "Load New Disc"), then re-emit
 /// disk_control_ready. The tray must be open; the caller closes it after.

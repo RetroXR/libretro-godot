@@ -481,6 +481,25 @@ public:
     void ScheduleLinkOp(int64_t frame, int32_t op,
                         const std::vector<std::pair<Wrapper*, unsigned>>& group);
 
+    // Accessory media (AccessoryMediaInterface.hpp): an amiibo on a GamePad, a
+    // strip through an e-Reader. All three enqueue emu-thread commands. The
+    // readers come back via accessory_readers_changed(readers), which the core
+    // also sets off whenever it publishes them; an insert or a removal answers
+    // accessory_media_done(reader, inserted, ok), then the readers again.
+
+    /// Ask for the core's readers, each with whether a medium is on it.
+    void RequestAccessoryReaders();
+
+    /// Put the file at `path` on reader `reader`.
+    void InsertAccessoryMedia(uint32_t reader, const godot::String& path);
+
+    /// Take whatever is on reader `reader` off it.
+    void RemoveAccessoryMedia(uint32_t reader);
+
+    // Emulation-thread internals (accessory media).
+    void EmitAccessoryReaders();
+    void AnswerAccessoryMediaDone(uint32_t reader, bool inserted, bool ok);
+
     // Emulation-thread internals (disk control).
     void EmitDiskInfo();
     void ApplyScheduledDiscOps(int64_t frame);

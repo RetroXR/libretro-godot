@@ -487,6 +487,17 @@ public:
     void SetDiskEjectState(bool ejected);
     /// Hand the core a new disc file at image `index` (tray must be open).
     void ReplaceDiskImage(int64_t index, const godot::String& path);
+    // ── Accessory media (amiibo, e-Reader strips) ────────────────────────────
+    /// Ask for the core's readers → accessory_readers_changed(readers), an
+    /// Array of Dictionaries (index, kind, port, flags, momentary, writes, name,
+    /// present). Also emitted whenever the core publishes its readers. Empty
+    /// when the core has none or nothing is running.
+    void RequestAccessoryReaders();
+    /// Put the file at `path` on reader `reader` → accessory_media_done(reader,
+    /// true, ok). A reader that WRITES may change the file.
+    void InsertAccessoryMedia(int64_t reader, const godot::String& path);
+    /// Take the medium off reader `reader` → accessory_media_done(reader, false, ok).
+    void RemoveAccessoryMedia(int64_t reader);
     /// Netplay: apply a link-cable change right before running `frame` on every
     /// peer, so a plug seated mid-game joins the bus on one agreed frame rather
     /// than whenever each peer's hands happened to move. Same shape as

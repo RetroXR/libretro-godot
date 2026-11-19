@@ -44,6 +44,76 @@ void Wrapper::ReplaceDiskImage(uint32_t index, const godot::String& path)
         std::make_unique<EmuThreadCommandReplaceDisk>(index, std::string(path.utf8().get_data())));
 }
 
+// ── Accessory media (amiibo, e-Reader strips) ────────────────────────────────
+
+void Wrapper::RequestAccessoryReaders()
+{
+    if (!AcceptsEmuCommands())
+    {
+        if (Libretro* node = LiveLibretroNode())
+            node->call_deferred("emit_signal", "accessory_readers_changed", godot::Array());
+        return;
+    }
+    m_emu_thread_commands_queue.enqueue(std::make_unique<EmuThreadCommandAccessoryReaders>());
+}
+
+void Wrapper::InsertAccessoryMedia(uint32_t reader, const godot::String& path)
+{
+    if (!AcceptsEmuCommands())
+    {
+        LogWarning("Accessory media: nothing running to take " + std::string(path.utf8().get_data()));
+        if (Libretro* node = LiveLibretroNode())
+            node->call_deferred("emit_signal", "accessory_media_done", static_cast<int64_t>(reader), true, false);
+        return;
+    }
+    m_emu_thread_commands_queue.enqueue(
+        std::make_unique<EmuThreadCommandAccessoryMedia>(reader, true, std::string(path.utf8().get_data())));
+}
+
+void Wrapper::RemoveAccessoryMedia(uint32_t reader)
+{
+    if (!AcceptsEmuCommands())
+    {
+        if (Libretro* node = LiveLibretroNode())
+            node->call_deferred("emit_signal", "accessory_media_done", static_cast<int64_t>(reader), false, false);
+        return;
+    }
+    m_emu_thread_commands_queue.enqueue(std::make_unique<EmuThreadCommandAccessoryMedia>(reader, false, std::string()));
+}
+
+/// Emulation thread. Each reader as a Dictionary: index, kind, port (-1 for one
+/// on the console), flags, momentary, writes, name, and present (1 a medium is
+/// on it, 0 none, -1 the core cannot tell).
+void Wrapper::EmitAccessoryReaders()
+{
+    godot::Array readers;
+    if (m_environment_handler)
+    {
+        const auto& list = m_environment_handler->GetAccessoryReaders();
+        for (size_t i = 0; i < list.size(); ++i)
+        {
+            const EnvironmentHandler::AccessoryReader& r = list[i];
+            godot::Dictionary d;
+            d["index"] = static_cast<int64_t>(i);
+            d["kind"] = static_cast<int64_t>(r.kind);
+            d["port"] = r.port == RETRO_ACCESSORY_PORT_CONSOLE ? int64_t(-1) : static_cast<int64_t>(r.port);
+            d["flags"] = static_cast<int64_t>(r.flags);
+            d["momentary"] = (r.flags & RETRO_ACCESSORY_READER_MOMENTARY) != 0;
+            d["writes"] = (r.flags & RETRO_ACCESSORY_READER_WRITES) != 0;
+            d["name"] = godot::String::utf8(r.name.c_str());
+            d["present"] = static_cast<int64_t>(m_environment_handler->AccessoryMediaPresent(static_cast<unsigned>(i)));
+            readers.append(d);
+        }
+    }
+    EmitSignalOnMainThread("accessory_readers_changed", godot::Array::make(readers));
+}
+
+void Wrapper::AnswerAccessoryMediaDone(uint32_t reader, bool inserted, bool ok)
+{
+    EmitSignalOnMainThread("accessory_media_done",
+        godot::Array::make(static_cast<int64_t>(reader), inserted, ok));
+}
+
 void Wrapper::ScheduleDiscOp(int64_t frame, int32_t op, uint32_t index, const godot::String& path)
 {
     if (!m_core || !m_running)

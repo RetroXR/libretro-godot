@@ -158,6 +158,7 @@ static bool runloop_clear_all_thread_waits(uint32_t clear_threads, void* data)
     X(RETRO_ENVIRONMENT_GET_CONTROLLER_DISPLAY_INTERFACE) \
     X(RETRO_ENVIRONMENT_GET_DEVICE_DISPLAY_INTERFACE) \
     X(RETRO_ENVIRONMENT_GET_DEVICE_DISPLAY_INTERFACE_FINAL) \
+    X(RETRO_ENVIRONMENT_SET_ACCESSORY_MEDIA_INTERFACE) \
     X(RETRO_ENVIRONMENT_GET_PLAYLIST_DIRECTORY) \
     X(RETRO_ENVIRONMENT_GET_FILE_BROWSER_START_DIRECTORY) \
     X(RETRO_ENVIRONMENT_RETROARCH_START_BLOCK) \
@@ -373,6 +374,7 @@ bool EnvironmentHandler::Callback(uint32_t cmd, void* data)
     case RETRO_ENVIRONMENT_GET_CONTROLLER_DISPLAY_INTERFACE:                     return instance->m_environment_handler->GetControllerDisplayInterface(static_cast<retro_controller_display_interface*>(data), instance);
     case RETRO_ENVIRONMENT_GET_DEVICE_DISPLAY_INTERFACE:
     case RETRO_ENVIRONMENT_GET_DEVICE_DISPLAY_INTERFACE_FINAL:                   return instance->m_environment_handler->GetDeviceDisplayInterface(static_cast<retro_device_display_interface*>(data), instance);
+    case RETRO_ENVIRONMENT_SET_ACCESSORY_MEDIA_INTERFACE:                        return instance->m_environment_handler->SetAccessoryMediaInterface(static_cast<const retro_accessory_media_interface*>(data), instance);
     case RETRO_ENVIRONMENT_GET_PLAYLIST_DIRECTORY:                              return EnvironmentNotImplemented(cmd);
     case RETRO_ENVIRONMENT_GET_FILE_BROWSER_START_DIRECTORY:                    return EnvironmentNotImplemented(cmd);
     // custom environment commands
@@ -960,5 +962,69 @@ bool EnvironmentHandler::GetDeviceDisplayInterface(retro_device_display_interfac
     Log("Device display interface: handed to the core (version "
         + std::to_string(RETRO_DEVICE_DISPLAY_INTERFACE_VERSION) + ")");
     return true;
+}
+
+bool EnvironmentHandler::SetAccessoryMediaInterface(const retro_accessory_media_interface* iface, Wrapper* instance)
+{
+    m_accessory_media = {};
+    m_accessory_readers.clear();
+    if (!iface)
+    {
+        LogWarning("Accessory media interface: the core passed none");
+        return false;
+    }
+    if (iface->interface_version != RETRO_ACCESSORY_MEDIA_INTERFACE_VERSION)
+    {
+        // A struct this build does not know the shape of is left unread.
+        LogWarning("Accessory media interface: version " + std::to_string(iface->interface_version)
+            + " refused (this frontend knows " + std::to_string(RETRO_ACCESSORY_MEDIA_INTERFACE_VERSION) + ")");
+        if (instance)
+            instance->EmitAccessoryReaders();
+        return false;
+    }
+
+    m_accessory_media = *iface;
+    if (iface->readers)
+    {
+        for (unsigned i = 0; i < iface->num_readers; ++i)
+        {
+            const retro_accessory_reader& r = iface->readers[i];
+            m_accessory_readers.push_back({ r.kind, r.port, r.flags, r.name ? r.name : "" });
+        }
+    }
+    std::string list;
+    for (const AccessoryReader& r : m_accessory_readers)
+        list += (list.empty() ? "" : ", ") + r.name + " (kind " + std::to_string(r.kind)
+            + ", port " + (r.port == RETRO_ACCESSORY_PORT_CONSOLE ? std::string("console") : std::to_string(r.port))
+            + ", flags " + std::to_string(r.flags) + ")";
+    Log("Accessory media interface: " + (m_accessory_readers.empty() ? std::string("no readers") : list)
+        + (m_accessory_media.insert ? "" : " -- no insert callback"));
+    if (instance)
+        instance->EmitAccessoryReaders();
+    return true;
+}
+
+bool EnvironmentHandler::InsertAccessoryMedia(unsigned reader, const std::string& path)
+{
+    if (reader >= m_accessory_readers.size() || !m_accessory_media.insert)
+    {
+        LogWarning("Accessory media: no reader " + std::to_string(reader) + " to take " + path);
+        return false;
+    }
+    return m_accessory_media.insert(reader, path.c_str());
+}
+
+bool EnvironmentHandler::RemoveAccessoryMedia(unsigned reader)
+{
+    if (reader >= m_accessory_readers.size() || !m_accessory_media.remove)
+        return false;
+    return m_accessory_media.remove(reader);
+}
+
+int EnvironmentHandler::AccessoryMediaPresent(unsigned reader) const
+{
+    if (reader >= m_accessory_readers.size() || !m_accessory_media.is_present)
+        return -1;
+    return m_accessory_media.is_present(reader) ? 1 : 0;
 }
 }
