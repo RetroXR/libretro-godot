@@ -29,16 +29,12 @@ extern "C" {
 /* Provisional; EXPERIMENTAL until upstream assigns a number. */
 #define RETRO_ENVIRONMENT_GET_CONTROLLER_AUDIO_INTERFACE       (110 | RETRO_ENVIRONMENT_EXPERIMENTAL)
 
-/* Bumped whenever the struct below changes.
- *
- * Before the call the core sets interface_version to the version it was built
- * against; a core built against version 1 passes 0 or 1. The frontend fills no
- * member past that version and writes back the version it filled. A core
- * needing a later one than it gets back must leave those members unused. */
-#define RETRO_CONTROLLER_AUDIO_INTERFACE_VERSION 2
+/* Bumped whenever the struct below changes. The frontend writes the version it
+ * filled in; a core needing a later one must leave the interface unused. */
+#define RETRO_CONTROLLER_AUDIO_INTERFACE_VERSION 1
 
-/* Where a device is (version 2). Append only. The same values as the device
- * display interface's locations. */
+/* Where a device is. Append only. The same values as the device display
+ * interface's locations. */
 enum retro_controller_audio_location
 {
    /* On the controller in `port`; `index` is its slot there. */
@@ -49,13 +45,16 @@ enum retro_controller_audio_location
 
 struct retro_controller_audio_interface
 {
+   /* Written by the frontend. */
    unsigned interface_version;
 
    /* Passed back to every call below. */
    void *frontend_data;
 
-   /* One block of sound from device `index` on the controller in `port`: a Wii
-    * Remote's speaker is index 0, a VMU's buzzer the slot the card sits in.
+   /* One block of sound from the device at `location`
+    * (retro_controller_audio_location), `port`, `index`: a Wii Remote's speaker
+    * is a controller's index 0, a VMU's buzzer the slot the card sits in, a
+    * docked PocketStation's speaker a memory card slot's index 0.
     *
     * `data` is `frames` frames of interleaved stereo s16 at the core's own output
     * rate, the rate of its audio batch callback. Call it on the thread that calls
@@ -66,14 +65,8 @@ struct retro_controller_audio_interface
     * Returns false when the frontend cannot play this block on its own, and the
     * core should mix it into the main stream instead. Returns true when the block
     * was taken, including when the frontend chose to discard it. */
-   bool (*push)(void *frontend_data, unsigned port, unsigned index,
+   bool (*push)(void *frontend_data, unsigned location, unsigned port, unsigned index,
                 const int16_t *data, size_t frames);
-
-   /* Version 2. push() for the device at `location`
-    * (retro_controller_audio_location); push() is this with
-    * RETRO_CONTROLLER_AUDIO_CONTROLLER. Same rules as push(). */
-   bool (*push_device)(void *frontend_data, unsigned location, unsigned port,
-                       unsigned index, const int16_t *data, size_t frames);
 };
 
 #ifdef __cplusplus

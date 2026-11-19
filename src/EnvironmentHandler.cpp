@@ -891,23 +891,11 @@ namespace
 {
 // Called on whichever thread runs the core's audio batch callback, just before
 // the batch it belongs with.
-bool ControllerAudioPushTrampoline(void* frontend_data, unsigned port, unsigned index,
+bool ControllerAudioPushTrampoline(void* frontend_data, unsigned location, unsigned port, unsigned index,
                                    const int16_t* data, size_t frames)
 {
     Wrapper* instance = static_cast<Wrapper*>(frontend_data);
     // Rollback replay: the main batch is dropped, so this is too.
-    if (instance->IsNetplayReplaying())
-        return true;
-    if (!instance->m_audio_handler)
-        return false;
-    return instance->m_audio_handler->PushControllerFrames(RETRO_CONTROLLER_AUDIO_CONTROLLER, port, index, data, frames);
-}
-
-// Version 2: the same, for a device at `location` (a docked PocketStation).
-bool ControllerAudioPushDeviceTrampoline(void* frontend_data, unsigned location, unsigned port, unsigned index,
-                                         const int16_t* data, size_t frames)
-{
-    Wrapper* instance = static_cast<Wrapper*>(frontend_data);
     if (instance->IsNetplayReplaying())
         return true;
     if (!instance->m_audio_handler)
@@ -936,17 +924,9 @@ bool EnvironmentHandler::GetControllerAudioInterface(retro_controller_audio_inte
     if (!iface || !instance)
         return false;
 
-    // The core says which version it was built against; one built against 1
-    // passes 0 or 1 and has no push_device to write.
-    const unsigned asked = iface->interface_version;
-    const unsigned given = asked >= 2 ? RETRO_CONTROLLER_AUDIO_INTERFACE_VERSION : 1;
-    iface->interface_version = given;
+    iface->interface_version = RETRO_CONTROLLER_AUDIO_INTERFACE_VERSION;
     iface->frontend_data     = instance;
     iface->push              = &ControllerAudioPushTrampoline;
-    if (given >= 2)
-        iface->push_device = &ControllerAudioPushDeviceTrampoline;
-    Log("Controller audio interface: version " + std::to_string(given) + " (the core asked for "
-        + std::to_string(asked) + ")");
     return true;
 }
 
