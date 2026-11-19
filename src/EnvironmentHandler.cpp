@@ -158,7 +158,8 @@ static bool runloop_clear_all_thread_waits(uint32_t clear_threads, void* data)
     X(RETRO_ENVIRONMENT_GET_CONTROLLER_DISPLAY_INTERFACE) \
     X(RETRO_ENVIRONMENT_GET_DEVICE_DISPLAY_INTERFACE) \
     X(RETRO_ENVIRONMENT_GET_DEVICE_DISPLAY_INTERFACE_FINAL) \
-    X(RETRO_ENVIRONMENT_SET_ACCESSORY_MEDIA_INTERFACE) \
+    X(RETRO_ENVIRONMENT_SET_ACCESSORY_INTERFACE) \
+    X(RETRO_ENVIRONMENT_GET_NFC_INTERFACE) \
     X(RETRO_ENVIRONMENT_GET_PLAYLIST_DIRECTORY) \
     X(RETRO_ENVIRONMENT_GET_FILE_BROWSER_START_DIRECTORY) \
     X(RETRO_ENVIRONMENT_RETROARCH_START_BLOCK) \
@@ -374,7 +375,8 @@ bool EnvironmentHandler::Callback(uint32_t cmd, void* data)
     case RETRO_ENVIRONMENT_GET_CONTROLLER_DISPLAY_INTERFACE:                     return instance->m_environment_handler->GetControllerDisplayInterface(static_cast<retro_controller_display_interface*>(data), instance);
     case RETRO_ENVIRONMENT_GET_DEVICE_DISPLAY_INTERFACE:
     case RETRO_ENVIRONMENT_GET_DEVICE_DISPLAY_INTERFACE_FINAL:                   return instance->m_environment_handler->GetDeviceDisplayInterface(static_cast<retro_device_display_interface*>(data), instance);
-    case RETRO_ENVIRONMENT_SET_ACCESSORY_MEDIA_INTERFACE:                        return instance->m_environment_handler->SetAccessoryMediaInterface(static_cast<const retro_accessory_media_interface*>(data), instance);
+    case RETRO_ENVIRONMENT_SET_ACCESSORY_INTERFACE:                        return instance->m_environment_handler->SetAccessoryInterface(static_cast<const retro_accessory_interface*>(data), instance);
+    case RETRO_ENVIRONMENT_GET_NFC_INTERFACE:                                    return instance->m_environment_handler->GetNfcInterface(static_cast<retro_nfc_interface*>(data));
     case RETRO_ENVIRONMENT_GET_PLAYLIST_DIRECTORY:                              return EnvironmentNotImplemented(cmd);
     case RETRO_ENVIRONMENT_GET_FILE_BROWSER_START_DIRECTORY:                    return EnvironmentNotImplemented(cmd);
     // custom environment commands
@@ -964,20 +966,122 @@ bool EnvironmentHandler::GetDeviceDisplayInterface(retro_device_display_interfac
     return true;
 }
 
-bool EnvironmentHandler::SetAccessoryMediaInterface(const retro_accessory_media_interface* iface, Wrapper* instance)
+namespace
+{
+// GET_NFC_INTERFACE's calls carry no frontend pointer, so each finds its
+// machine as every libretro callback does: the core calls from its emulation
+// thread, whose Wrapper is the thread's own.
+Wrapper* NfcWrapper()
+{
+    Wrapper* wrapper = Wrapper::GetCurrentThreadWrapper();
+    if (!wrapper)
+        LogWarning("NFC reader: called from a thread with no machine on it; answered as no reader");
+    return wrapper;
+}
+
+bool RETRO_CALLCONV NfcStartScan()
+{
+    Wrapper* w = NfcWrapper();
+    if (!w)
+        return false;
+    const bool was = w->m_nfc_reader.Scanning();
+    w->m_nfc_reader.StartScan();
+    if (!was)
+    {
+        Log("NFC reader: the core scans" + std::string(w->m_nfc_reader.HasTag()
+            ? " (" + w->m_nfc_reader.TagPath() + " is on it)" : " (nothing on it)"));
+        w->EmitSignalOnMainThread("nfc_scanning", godot::Array::make(true));
+    }
+    return true;
+}
+
+void RETRO_CALLCONV NfcStopScan()
+{
+    Wrapper* w = NfcWrapper();
+    if (!w || !w->m_nfc_reader.Scanning())
+        return;
+    w->m_nfc_reader.StopScan();
+    Log("NFC reader: the core stopped scanning");
+    w->EmitSignalOnMainThread("nfc_scanning", godot::Array::make(false));
+}
+
+retro_nfc_status RETRO_CALLCONV NfcGetStatus()
+{
+    Wrapper* w = NfcWrapper();
+    return w ? w->m_nfc_reader.Status() : RETRO_NFC_STATUS_UNSUPPORTED;
+}
+
+bool RETRO_CALLCONV NfcGetTagInfo(retro_nfc_tag_info* info)
+{
+    Wrapper* w = NfcWrapper();
+    // Version 1 is what GetNfcInterface hands out, so the core's struct may end
+    // before version 5's caps.
+    return w && w->m_nfc_reader.TagInfo(info, 1);
+}
+
+int RETRO_CALLCONV NfcRead(unsigned offset, uint8_t* buf, unsigned len)
+{
+    Wrapper* w = NfcWrapper();
+    return w ? w->m_nfc_reader.Read(offset, buf, len) : -1;
+}
+
+int RETRO_CALLCONV NfcWrite(unsigned offset, const uint8_t* buf, unsigned len)
+{
+    Wrapper* w = NfcWrapper();
+    if (!w)
+        return -1;
+    std::string path;
+    const int written = w->m_nfc_reader.Write(offset, buf, len, &path);
+    if (written < 0)
+    {
+        LogWarning("NFC reader: a write of " + std::to_string(len) + " bytes at " + std::to_string(offset)
+            + " did not reach the tag (none on the reader, out of range, or the file refused it)");
+        return -1;
+    }
+    LogOK("NFC reader: the core wrote " + std::to_string(written) + " bytes to " + path);
+    w->EmitSignalOnMainThread("nfc_tag_written", godot::Array::make(godot::String::utf8(path.c_str())));
+    return written;
+}
+}
+
+bool EnvironmentHandler::GetNfcInterface(retro_nfc_interface* iface)
+{
+    if (!iface)
+        return false;
+    const unsigned asked = iface->version;
+    if (asked < 1)
+    {
+        LogWarning("NFC interface: the core asked for version " + std::to_string(asked) + ", which is none");
+        return false;
+    }
+    // Version 1 only: a reader served from a dump has no sources to pick, no
+    // hardware to come and go, and no Mifare. Only version 1's pointers are
+    // written, because a core's struct is only as long as its own version.
+    iface->version      = 1;
+    iface->start_scan   = &NfcStartScan;
+    iface->stop_scan    = &NfcStopScan;
+    iface->get_status   = &NfcGetStatus;
+    iface->get_tag_info = &NfcGetTagInfo;
+    iface->read         = &NfcRead;
+    iface->write        = &NfcWrite;
+    Log("NFC interface: handed to the core at version 1 (it asked for " + std::to_string(asked) + ")");
+    return true;
+}
+
+bool EnvironmentHandler::SetAccessoryInterface(const retro_accessory_interface* iface, Wrapper* instance)
 {
     m_accessory_media = {};
     m_accessory_readers.clear();
     if (!iface)
     {
-        LogWarning("Accessory media interface: the core passed none");
+        LogWarning("Accessory interface: the core passed none");
         return false;
     }
-    if (iface->interface_version != RETRO_ACCESSORY_MEDIA_INTERFACE_VERSION)
+    if (iface->interface_version != RETRO_ACCESSORY_INTERFACE_VERSION)
     {
         // A struct this build does not know the shape of is left unread.
-        LogWarning("Accessory media interface: version " + std::to_string(iface->interface_version)
-            + " refused (this frontend knows " + std::to_string(RETRO_ACCESSORY_MEDIA_INTERFACE_VERSION) + ")");
+        LogWarning("Accessory interface: version " + std::to_string(iface->interface_version)
+            + " refused (this frontend knows " + std::to_string(RETRO_ACCESSORY_INTERFACE_VERSION) + ")");
         if (instance)
             instance->EmitAccessoryReaders();
         return false;
@@ -997,7 +1101,7 @@ bool EnvironmentHandler::SetAccessoryMediaInterface(const retro_accessory_media_
         list += (list.empty() ? "" : ", ") + r.name + " (kind " + std::to_string(r.kind)
             + ", port " + (r.port == RETRO_ACCESSORY_PORT_CONSOLE ? std::string("console") : std::to_string(r.port))
             + ", flags " + std::to_string(r.flags) + ")";
-    Log("Accessory media interface: " + (m_accessory_readers.empty() ? std::string("no readers") : list)
+    Log("Accessory interface: " + (m_accessory_readers.empty() ? std::string("no readers") : list)
         + (m_accessory_media.insert ? "" : " -- no insert callback"));
     if (instance)
         instance->EmitAccessoryReaders();

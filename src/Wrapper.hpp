@@ -24,6 +24,7 @@
 #include <set>
 #include <array>
 #include "TransferPakInterface.hpp"
+#include "NfcReader.hpp"
 #include <deque>
 #include <iterator>
 #include <unordered_map>
@@ -481,7 +482,23 @@ public:
     void ScheduleLinkOp(int64_t frame, int32_t op,
                         const std::vector<std::pair<Wrapper*, unsigned>>& group);
 
-    // Accessory media (AccessoryMediaInterface.hpp): an amiibo on a GamePad, a
+    // NFC reader (NfcInterface.hpp, RetroArch#19754): the frontend IS the
+    // reader a core like Cemu or a 3DS core reads amiibo from. The tag is set
+    // and cleared here, on the main thread; the core polls m_nfc_reader from
+    // its own through the GET_NFC_INTERFACE trampolines, which also emit
+    // nfc_scanning(scanning) as the core starts and stops and
+    // nfc_tag_written(path) after a save reached the dump on disk.
+
+    /// Put the amiibo dump at `path` on this machine's reader. False when it
+    /// cannot be read or is too small to be a tag.
+    bool SetNfcTag(const godot::String& path);
+
+    /// Take the tag off the reader.
+    void ClearNfcTag();
+
+    NfcReader m_nfc_reader;
+
+    // Accessory media (AccessoryInterface.hpp): media that is not NFC, a
     // strip through an e-Reader. All three enqueue emu-thread commands. The
     // readers come back via accessory_readers_changed(readers), which the core
     // also sets off whenever it publishes them; an insert or a removal answers

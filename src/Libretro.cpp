@@ -526,6 +526,21 @@ void Libretro::ReplaceDiskImage(int64_t index, const godot::String& path)
     m_wrapper->ReplaceDiskImage(static_cast<uint32_t>(index < 0 ? 0 : index), path);
 }
 
+bool Libretro::SetNfcTag(const godot::String& path)
+{
+    return m_wrapper->SetNfcTag(path);
+}
+
+void Libretro::ClearNfcTag()
+{
+    m_wrapper->ClearNfcTag();
+}
+
+bool Libretro::IsNfcScanning() const
+{
+    return m_wrapper->m_nfc_reader.Scanning();
+}
+
 void Libretro::RequestAccessoryReaders()
 {
     m_wrapper->RequestAccessoryReaders();
@@ -951,6 +966,9 @@ void Libretro::_bind_methods()
     ClassDB::bind_method(D_METHOD("RequestDiskInfo"), &Libretro::RequestDiskInfo);
     ClassDB::bind_method(D_METHOD("SetDiskEjectState", "ejected"), &Libretro::SetDiskEjectState);
     ClassDB::bind_method(D_METHOD("ReplaceDiskImage", "index", "path"), &Libretro::ReplaceDiskImage);
+    ClassDB::bind_method(D_METHOD("SetNfcTag", "path"), &Libretro::SetNfcTag);
+    ClassDB::bind_method(D_METHOD("ClearNfcTag"), &Libretro::ClearNfcTag);
+    ClassDB::bind_method(D_METHOD("IsNfcScanning"), &Libretro::IsNfcScanning);
     ClassDB::bind_method(D_METHOD("RequestAccessoryReaders"), &Libretro::RequestAccessoryReaders);
     ClassDB::bind_method(D_METHOD("InsertAccessoryMedia", "reader", "path"), &Libretro::InsertAccessoryMedia);
     ClassDB::bind_method(D_METHOD("RemoveAccessoryMedia", "reader"), &Libretro::RemoveAccessoryMedia);
@@ -968,6 +986,8 @@ void Libretro::_bind_methods()
         PropertyInfo(Variant::INT, "count"),
         PropertyInfo(Variant::INT, "current_index"),
         PropertyInfo(Variant::BOOL, "ejected")));
+    ADD_SIGNAL(MethodInfo("nfc_scanning", PropertyInfo(Variant::BOOL, "scanning")));
+    ADD_SIGNAL(MethodInfo("nfc_tag_written", PropertyInfo(Variant::STRING, "path")));
     ADD_SIGNAL(MethodInfo("accessory_readers_changed",
         PropertyInfo(Variant::ARRAY, "readers")));
     ADD_SIGNAL(MethodInfo("accessory_media_done",

@@ -44,7 +44,30 @@ void Wrapper::ReplaceDiskImage(uint32_t index, const godot::String& path)
         std::make_unique<EmuThreadCommandReplaceDisk>(index, std::string(path.utf8().get_data())));
 }
 
-// ── Accessory media (amiibo, e-Reader strips) ────────────────────────────────
+// ── NFC reader (amiibo) ──────────────────────────────────────────────────────
+
+bool Wrapper::SetNfcTag(const godot::String& path)
+{
+    const std::string p(path.utf8().get_data());
+    std::string error;
+    if (!m_nfc_reader.SetTag(p, &error))
+    {
+        LogWarning("NFC reader: " + p + " refused, " + error);
+        return false;
+    }
+    LogOK("NFC reader: " + p + " on the reader"
+        + std::string(m_nfc_reader.Scanning() ? "" : " (the core is not scanning yet)"));
+    return true;
+}
+
+void Wrapper::ClearNfcTag()
+{
+    if (m_nfc_reader.HasTag())
+        Log("NFC reader: " + m_nfc_reader.TagPath() + " taken off");
+    m_nfc_reader.ClearTag();
+}
+
+// ── Accessory media (e-Reader strips) ────────────────────────────────────────
 
 void Wrapper::RequestAccessoryReaders()
 {
@@ -82,7 +105,7 @@ void Wrapper::RemoveAccessoryMedia(uint32_t reader)
 }
 
 /// Emulation thread. Each reader as a Dictionary: index, kind, port (-1 for one
-/// on the console), flags, momentary, writes, name, and present (1 a medium is
+/// on the console), flags, momentary, name, and present (1 a medium is
 /// on it, 0 none, -1 the core cannot tell).
 void Wrapper::EmitAccessoryReaders()
 {
@@ -99,7 +122,6 @@ void Wrapper::EmitAccessoryReaders()
             d["port"] = r.port == RETRO_ACCESSORY_PORT_CONSOLE ? int64_t(-1) : static_cast<int64_t>(r.port);
             d["flags"] = static_cast<int64_t>(r.flags);
             d["momentary"] = (r.flags & RETRO_ACCESSORY_READER_MOMENTARY) != 0;
-            d["writes"] = (r.flags & RETRO_ACCESSORY_READER_WRITES) != 0;
             d["name"] = godot::String::utf8(r.name.c_str());
             d["present"] = static_cast<int64_t>(m_environment_handler->AccessoryMediaPresent(static_cast<unsigned>(i)));
             readers.append(d);

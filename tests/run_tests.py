@@ -46,6 +46,9 @@ TESTS = {
     # Header-only: the shape of the picture and the frame rotation are pure,
     # while VideoHandler.cpp reaches Godot.
     "video_geometry_test.cpp": [],
+    # Header-only: the NFC reader's whole behaviour, while the trampolines that
+    # hand it to a core reach Wrapper and Godot.
+    "nfc_reader_test.cpp": [],
     # A benchmark rather than a test: it prints a cost curve and only fails if
     # the bus cannot be set up. Run it on its own (--only link_bench), because
     # it is slow by design and its numbers want reading, not gating.

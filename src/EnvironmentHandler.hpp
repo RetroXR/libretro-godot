@@ -7,7 +7,8 @@
 
 #include <libretro.h>
 
-#include "AccessoryMediaInterface.hpp"
+#include "AccessoryInterface.hpp"
+#include "NfcInterface.hpp"
 #include "ControllerAudioInterface.hpp"
 #include "ControllerDisplayInterface.hpp"
 #include "DeviceDisplayInterface.hpp"
@@ -40,7 +41,7 @@ public:
     bool SetDiskImageIndex(uint32_t index);
     bool ReplaceDiskImage(uint32_t index, const std::string& path);
 
-    // Accessory media (AccessoryMediaInterface.hpp): the readers a core says it
+    // Accessory media (AccessoryInterface.hpp): the readers a core says it
     // has -- an amiibo's NFC reader, an e-Reader's card slot -- and the calls
     // that hand one a medium or take it away. EMULATION THREAD ONLY, like disk
     // control: the core publishes from its own calls and the frontend's
@@ -148,7 +149,7 @@ private:
     retro_vfs_interface m_vfs_interface;
     retro_disk_control_callback m_disk_control_callback = {};
     retro_disk_control_ext_callback m_disk_control_ext_callback = {};
-    retro_accessory_media_interface m_accessory_media = {};
+    retro_accessory_interface m_accessory_media = {};
     std::vector<AccessoryReader> m_accessory_readers;
 
     bool SetPerformanceLevel(uint32_t* level);
@@ -176,6 +177,7 @@ private:
     bool GetControllerAudioInterface(retro_controller_audio_interface* iface, Wrapper* instance);
     bool GetControllerDisplayInterface(retro_controller_display_interface* iface, Wrapper* instance);
     bool GetDeviceDisplayInterface(retro_device_display_interface* iface, Wrapper* instance);
-    bool SetAccessoryMediaInterface(const retro_accessory_media_interface* iface, Wrapper* instance);
+    bool SetAccessoryInterface(const retro_accessory_interface* iface, Wrapper* instance);
+    bool GetNfcInterface(retro_nfc_interface* iface);
 };
 }

@@ -487,14 +487,25 @@ public:
     void SetDiskEjectState(bool ejected);
     /// Hand the core a new disc file at image `index` (tray must be open).
     void ReplaceDiskImage(int64_t index, const godot::String& path);
-    // ── Accessory media (amiibo, e-Reader strips) ────────────────────────────
+    // ── NFC reader (amiibo) ──────────────────────────────────────────────────
+    /// Put the amiibo dump at `path` on this machine's NFC reader, which a core
+    /// reads through GET_NFC_INTERFACE. A save the game makes to the figure is
+    /// written back into that file → nfc_tag_written(path). False when the file
+    /// cannot be read or is too small to be a tag. The core sees it only while
+    /// it scans → nfc_scanning(scanning).
+    bool SetNfcTag(const godot::String& path);
+    /// Take the tag off the reader.
+    void ClearNfcTag();
+    /// Whether the core has the reader scanning now.
+    bool IsNfcScanning() const;
+    // ── Accessory media (e-Reader strips) ────────────────────────────────────
     /// Ask for the core's readers → accessory_readers_changed(readers), an
-    /// Array of Dictionaries (index, kind, port, flags, momentary, writes, name,
+    /// Array of Dictionaries (index, kind, port, flags, momentary, name,
     /// present). Also emitted whenever the core publishes its readers. Empty
     /// when the core has none or nothing is running.
     void RequestAccessoryReaders();
     /// Put the file at `path` on reader `reader` → accessory_media_done(reader,
-    /// true, ok). A reader that WRITES may change the file.
+    /// true, ok).
     void InsertAccessoryMedia(int64_t reader, const godot::String& path);
     /// Take the medium off reader `reader` → accessory_media_done(reader, false, ok).
     void RemoveAccessoryMedia(int64_t reader);
