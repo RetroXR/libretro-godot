@@ -49,7 +49,7 @@ extern "C" {
  * whatever it did before -- carrying on with disk control, say.
  * ------------------------------------------------------------------------- */
 
-#define RETRO_ENVIRONMENT_SET_ACCESSORY_INTERFACE (107 | RETRO_ENVIRONMENT_EXPERIMENTAL)
+#define RETRO_ENVIRONMENT_SET_ACCESSORY_INTERFACE (112 | RETRO_ENVIRONMENT_EXPERIMENTAL)
 
 /* Bumped whenever the structs below change. Written by the core; a frontend
  * that only knows an earlier version must leave the interface unused. */

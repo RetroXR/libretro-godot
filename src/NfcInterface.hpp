@@ -9,9 +9,11 @@
 // from libretro.h. The guard below makes that switch-over safe: a libretro.h
 // that already has the call wins. Copies: RetroXR's Cemu fork, src/libretro/NfcInterface.h (a core using it).
 //
-// Its number, 99 | EXPERIMENTAL, is the PR's. Upstream has since merged
-// RETRO_ENVIRONMENT_GET_VIDEO_DECODE_INTERFACE on 99, so the PR will be
-// renumbered; follow it when it is.
+// One change from the PR: the number. The PR has 99 | EXPERIMENTAL, which
+// upstream has since given RETRO_ENVIRONMENT_GET_VIDEO_DECODE_INTERFACE, so
+// here it is 113 | EXPERIMENTAL, retroXR's provisional number past every one
+// upstream has assigned or has an open proposal for. Follow the PR when it is
+// renumbered.
 
 #include <limits.h>
 #include <stdint.h>
@@ -43,7 +45,7 @@ extern "C" {
  * @return \c true if the frontend provides an NFC interface.
  * @see retro_nfc_interface
  */
-#define RETRO_ENVIRONMENT_GET_NFC_INTERFACE (99 | RETRO_ENVIRONMENT_EXPERIMENTAL)
+#define RETRO_ENVIRONMENT_GET_NFC_INTERFACE (113 | RETRO_ENVIRONMENT_EXPERIMENTAL)
 
 /** Version of the NFC interface described by this header. */
 #define RETRO_NFC_INTERFACE_VERSION 5

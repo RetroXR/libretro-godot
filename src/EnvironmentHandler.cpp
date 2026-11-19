@@ -150,14 +150,10 @@ static bool runloop_clear_all_thread_waits(uint32_t clear_threads, void* data)
     X(RETRO_ENVIRONMENT_GET_DEVICE_POWER) \
     X(RETRO_ENVIRONMENT_SET_NETPACKET_INTERFACE) \
     X(RETRO_ENVIRONMENT_GET_LINK_INTERFACE) \
-    X(RETRO_ENVIRONMENT_GET_LINK_INTERFACE_FINAL) \
     X(RETRO_ENVIRONMENT_GET_TRANSFER_PAK_INTERFACE) \
-    X(RETRO_ENVIRONMENT_GET_TRANSFER_PAK_INTERFACE_FINAL) \
     X(RETRO_ENVIRONMENT_GET_CONTROLLER_AUDIO_INTERFACE) \
-    X(RETRO_ENVIRONMENT_GET_CONTROLLER_AUDIO_INTERFACE_FINAL) \
     X(RETRO_ENVIRONMENT_GET_CONTROLLER_DISPLAY_INTERFACE) \
     X(RETRO_ENVIRONMENT_GET_DEVICE_DISPLAY_INTERFACE) \
-    X(RETRO_ENVIRONMENT_GET_DEVICE_DISPLAY_INTERFACE_FINAL) \
     X(RETRO_ENVIRONMENT_SET_ACCESSORY_INTERFACE) \
     X(RETRO_ENVIRONMENT_GET_NFC_INTERFACE) \
     X(RETRO_ENVIRONMENT_GET_PLAYLIST_DIRECTORY) \
@@ -364,17 +360,11 @@ bool EnvironmentHandler::Callback(uint32_t cmd, void* data)
     case RETRO_ENVIRONMENT_GET_MICROPHONE_INTERFACE:                            return instance->m_microphone_handler->GetMicrophoneInterface(static_cast<retro_microphone_interface*>(data));
     case RETRO_ENVIRONMENT_GET_DEVICE_POWER:                                    return EnvironmentNotImplemented(cmd);
     case RETRO_ENVIRONMENT_SET_NETPACKET_INTERFACE:                             return EnvironmentNotImplemented(cmd);
-    // Both spellings: cores probe the experimental number today, and will
-    // find the plain one if libretro ever assigns it.
-    case RETRO_ENVIRONMENT_GET_LINK_INTERFACE:
-    case RETRO_ENVIRONMENT_GET_LINK_INTERFACE_FINAL:                            return instance->m_environment_handler->GetLinkInterface(static_cast<retro_link_interface*>(data));
-    case RETRO_ENVIRONMENT_GET_TRANSFER_PAK_INTERFACE:
-    case RETRO_ENVIRONMENT_GET_TRANSFER_PAK_INTERFACE_FINAL:                     return instance->m_environment_handler->GetTransferPakInterface(static_cast<retro_transfer_pak_interface*>(data), instance);
-    case RETRO_ENVIRONMENT_GET_CONTROLLER_AUDIO_INTERFACE:
-    case RETRO_ENVIRONMENT_GET_CONTROLLER_AUDIO_INTERFACE_FINAL:                 return instance->m_environment_handler->GetControllerAudioInterface(static_cast<retro_controller_audio_interface*>(data), instance);
+    case RETRO_ENVIRONMENT_GET_LINK_INTERFACE:                                   return instance->m_environment_handler->GetLinkInterface(static_cast<retro_link_interface*>(data));
+    case RETRO_ENVIRONMENT_GET_TRANSFER_PAK_INTERFACE:                           return instance->m_environment_handler->GetTransferPakInterface(static_cast<retro_transfer_pak_interface*>(data), instance);
+    case RETRO_ENVIRONMENT_GET_CONTROLLER_AUDIO_INTERFACE:                       return instance->m_environment_handler->GetControllerAudioInterface(static_cast<retro_controller_audio_interface*>(data), instance);
     case RETRO_ENVIRONMENT_GET_CONTROLLER_DISPLAY_INTERFACE:                     return instance->m_environment_handler->GetControllerDisplayInterface(static_cast<retro_controller_display_interface*>(data), instance);
-    case RETRO_ENVIRONMENT_GET_DEVICE_DISPLAY_INTERFACE:
-    case RETRO_ENVIRONMENT_GET_DEVICE_DISPLAY_INTERFACE_FINAL:                   return instance->m_environment_handler->GetDeviceDisplayInterface(static_cast<retro_device_display_interface*>(data), instance);
+    case RETRO_ENVIRONMENT_GET_DEVICE_DISPLAY_INTERFACE:                         return instance->m_environment_handler->GetDeviceDisplayInterface(static_cast<retro_device_display_interface*>(data), instance);
     case RETRO_ENVIRONMENT_SET_ACCESSORY_INTERFACE:                        return instance->m_environment_handler->SetAccessoryInterface(static_cast<const retro_accessory_interface*>(data), instance);
     case RETRO_ENVIRONMENT_GET_NFC_INTERFACE:                                    return instance->m_environment_handler->GetNfcInterface(static_cast<retro_nfc_interface*>(data));
     case RETRO_ENVIRONMENT_GET_PLAYLIST_DIRECTORY:                              return EnvironmentNotImplemented(cmd);

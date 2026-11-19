@@ -209,6 +209,9 @@ sources.append("external/libretro-common/memmap/memalign.c")
 sources.append("external/libretro-common/features/features_cpu.c")
 sources.append("external/libretro-common/gfx/scaler/pixconv.c")
 sources.append("external/libretro-common/string/stdstring.c")
+# config_file.c and file_stream.c parse numbers with rstrtod/rstrtof since the
+# 2026-11 libretro-common (locale-independent strtod).
+sources.append("external/libretro-common/string/rstrtod.c")
 sources.append("external/libretro-common/file/file_path.c")
 sources.append("external/libretro-common/file/file_path_io.c")
 sources.append("external/libretro-common/time/rtime.c")

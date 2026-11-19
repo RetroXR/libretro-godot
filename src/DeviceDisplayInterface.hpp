@@ -28,11 +28,10 @@
 extern "C" {
 #endif
 
-/* The number is provisional. A core probes the EXPERIMENTAL form first and falls
- * back to the plain one, so a core built today keeps working against a frontend
- * that later adopts the unflagged number. */
-#define RETRO_ENVIRONMENT_GET_DEVICE_DISPLAY_INTERFACE       (97 | RETRO_ENVIRONMENT_EXPERIMENTAL)
-#define RETRO_ENVIRONMENT_GET_DEVICE_DISPLAY_INTERFACE_FINAL 97
+/* Provisional, and EXPERIMENTAL until upstream assigns it: a retroXR number
+ * past every one upstream libretro has assigned or has an open proposal for.
+ * Upstream took 94-106 after retroXR first numbered these calls there. */
+#define RETRO_ENVIRONMENT_GET_DEVICE_DISPLAY_INTERFACE       (111 | RETRO_ENVIRONMENT_EXPERIMENTAL)
 
 /* Bumped whenever the struct below changes. The frontend writes the version it
  * filled in; a core needing a later one must leave the interface unused. */

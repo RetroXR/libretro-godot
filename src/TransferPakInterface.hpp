@@ -26,11 +26,10 @@
 extern "C" {
 #endif
 
-/* The number is provisional. A core probes the EXPERIMENTAL form first and falls
- * back to the plain one, so a core built today keeps working against a frontend
- * that later adopts the unflagged number. */
-#define RETRO_ENVIRONMENT_GET_TRANSFER_PAK_INTERFACE       (95 | RETRO_ENVIRONMENT_EXPERIMENTAL)
-#define RETRO_ENVIRONMENT_GET_TRANSFER_PAK_INTERFACE_FINAL 95
+/* Provisional, and EXPERIMENTAL until upstream assigns it: a retroXR number
+ * past every one upstream libretro has assigned or has an open proposal for.
+ * Upstream took 94-106 after retroXR first numbered these calls there. */
+#define RETRO_ENVIRONMENT_GET_TRANSFER_PAK_INTERFACE       (108 | RETRO_ENVIRONMENT_EXPERIMENTAL)
 
 /* How many controllers may hold a pak. Matches GAME_CONTROLLERS_COUNT; declared
  * here too so the frontend side of this contract does not have to include the
