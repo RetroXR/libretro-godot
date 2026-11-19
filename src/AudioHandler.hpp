@@ -191,19 +191,23 @@ public:
 
     static constexpr unsigned k_controller_devices = 2;
 
-    /// One block of a controller's own sound, handed over through
+    /// retro_controller_audio_location values: on a controller, in a memory card slot.
+    static constexpr unsigned k_device_locations = 2;
+
+    /// One block of a device's own sound, handed over through
     /// RETRO_ENVIRONMENT_GET_CONTROLLER_AUDIO_INTERFACE on the thread that runs the
     /// core's batch callback. It plays on a Meta XR voice of its own, created the
     /// first time that device makes a sound, so GDScript can put it on the
-    /// controller.
+    /// device: a controller's (location 0) or a memory card slot's (location 1).
     ///
     /// False tells the core to mix the block into its main stream instead: the
     /// fallback backend has no voices to give, and the SDK can run out of them.
-    bool PushControllerFrames(unsigned port, unsigned index, const int16_t* data, size_t frames);
+    bool PushControllerFrames(unsigned location, unsigned port, unsigned index,
+                              const int16_t* data, size_t frames);
 
-    /// The voice device `index` on `port` plays on, or -1 until it has made a
-    /// sound. GDScript positions it; it does not own it.
-    int GetControllerVoiceId(unsigned port, unsigned index) const;
+    /// The voice device `index` on `port` at `location` plays on, or -1 until it
+    /// has made a sound. GDScript positions it; it does not own it.
+    int GetControllerVoiceId(unsigned location, unsigned port, unsigned index) const;
 
 private:
     // --- fallback: Godot's own 3D panning -----------------------------------
@@ -282,7 +286,7 @@ private:
         std::vector<float> out_float;
         godot::PackedVector2Array push_buf;
     };
-    ControllerVoice m_controller_voices[k_controller_ports * k_controller_devices];
+    ControllerVoice m_controller_voices[k_device_locations * k_controller_ports * k_controller_devices];
     /// The ratio the last main batch was resampled at, rate trim included. The
     /// controller voices drain at the same mixer rate, so they are resampled at it
     /// too and cannot drift away from the main voice.

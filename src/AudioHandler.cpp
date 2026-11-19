@@ -1032,9 +1032,10 @@ void AudioHandler::ReleaseSurroundVoices()
         Log("Audio: surround released");
 }
 
-bool AudioHandler::PushControllerFrames(unsigned port, unsigned index, const int16_t* data, size_t frames)
+bool AudioHandler::PushControllerFrames(unsigned location, unsigned port, unsigned index,
+                                        const int16_t* data, size_t frames)
 {
-    if (port >= k_controller_ports || index >= k_controller_devices)
+    if (location >= k_device_locations || port >= k_controller_ports || index >= k_controller_devices)
         return false;
     if (!data || frames == 0)
         return true;
@@ -1050,7 +1051,7 @@ bool AudioHandler::PushControllerFrames(unsigned port, unsigned index, const int
     if (!m_accept_audio.load(std::memory_order_relaxed))
         return true;
 
-    ControllerVoice& cv = m_controller_voices[port * k_controller_devices + index];
+    ControllerVoice& cv = m_controller_voices[(location * k_controller_ports + port) * k_controller_devices + index];
     int voice = cv.voice.load(std::memory_order_relaxed);
     if (voice < 0)
     {
@@ -1067,7 +1068,8 @@ bool AudioHandler::PushControllerFrames(unsigned port, unsigned index, const int
         if (voice < 0)
             return false;
         cv.voice.store(voice, std::memory_order_release);
-        Log("AudioHandler: controller " + std::to_string(port) + "." + std::to_string(index)
+        Log(std::string("AudioHandler: ") + (location == 0 ? "controller " : "memory card slot ")
+            + std::to_string(port) + "." + std::to_string(index)
             + " plays on voice " + std::to_string(voice));
     }
 
@@ -1127,11 +1129,12 @@ bool AudioHandler::PushControllerFrames(unsigned port, unsigned index, const int
     return true;
 }
 
-int AudioHandler::GetControllerVoiceId(unsigned port, unsigned index) const
+int AudioHandler::GetControllerVoiceId(unsigned location, unsigned port, unsigned index) const
 {
-    if (port >= k_controller_ports || index >= k_controller_devices)
+    if (location >= k_device_locations || port >= k_controller_ports || index >= k_controller_devices)
         return -1;
-    return m_controller_voices[port * k_controller_devices + index].voice.load(std::memory_order_acquire);
+    return m_controller_voices[(location * k_controller_ports + port) * k_controller_devices + index]
+        .voice.load(std::memory_order_acquire);
 }
 
 void AudioHandler::ReleaseControllerVoices(bool destroy_voices)

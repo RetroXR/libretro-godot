@@ -180,7 +180,15 @@ int Libretro::GetControllerAudioVoiceId(int port, int index)
 {
     if (!m_wrapper || !m_wrapper->m_audio_handler || port < 0 || index < 0)
         return -1;
-    return m_wrapper->m_audio_handler->GetControllerVoiceId(static_cast<unsigned>(port), static_cast<unsigned>(index));
+    return m_wrapper->m_audio_handler->GetControllerVoiceId(0u, static_cast<unsigned>(port), static_cast<unsigned>(index));
+}
+
+int Libretro::GetDeviceAudioVoiceId(int location, int port, int index)
+{
+    if (!m_wrapper || !m_wrapper->m_audio_handler || location < 0 || port < 0 || index < 0)
+        return -1;
+    return m_wrapper->m_audio_handler->GetControllerVoiceId(static_cast<unsigned>(location),
+        static_cast<unsigned>(port), static_cast<unsigned>(index));
 }
 
 bool Libretro::IsAudioReady() const
@@ -884,6 +892,7 @@ void Libretro::_bind_methods()
     ClassDB::bind_method(D_METHOD("GetInputDescriptors"), &Libretro::GetInputDescriptors);
     ClassDB::bind_method(D_METHOD("GetAudioVoiceIds"), &Libretro::GetAudioVoiceIds);
     ClassDB::bind_method(D_METHOD("GetControllerAudioVoiceId", "port", "index"), &Libretro::GetControllerAudioVoiceId, DEFVAL(0));
+    ClassDB::bind_method(D_METHOD("GetDeviceAudioVoiceId", "location", "port", "index"), &Libretro::GetDeviceAudioVoiceId, DEFVAL(0));
     ClassDB::bind_method(D_METHOD("IsAudioReady"), &Libretro::IsAudioReady);
     ClassDB::bind_method(D_METHOD("SetAudioChannelMode", "mode"), &Libretro::SetAudioChannelMode);
     ClassDB::bind_method(D_METHOD("SetSurroundEnabled", "on"), &Libretro::SetSurroundEnabled);

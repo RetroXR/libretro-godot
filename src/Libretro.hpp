@@ -268,6 +268,9 @@ public:
     /// on `port`, index 0 being a Wii Remote's speaker -- or -1 until that device
     /// has made a sound, and always -1 on the fallback backend.
     int GetControllerAudioVoiceId(int port, int index);
+    /// The voice a device at `location` (0 a controller, 1 a memory card slot)
+    /// plays on, or -1 until it has made a sound: a docked PocketStation is (1, slot, 0).
+    int GetDeviceAudioVoiceId(int location, int port, int index);
 
     /// True once the audio sink is up and a backend has actually been chosen.
     ///
