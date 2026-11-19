@@ -28,9 +28,7 @@
 extern "C" {
 #endif
 
-/* Provisional, and EXPERIMENTAL until upstream assigns it: a retroXR number
- * past every one upstream libretro has assigned or has an open proposal for.
- * Upstream took 94-106 after retroXR first numbered these calls there. */
+/* Provisional; EXPERIMENTAL until upstream assigns a number. */
 #define RETRO_ENVIRONMENT_GET_DEVICE_DISPLAY_INTERFACE       (111 | RETRO_ENVIRONMENT_EXPERIMENTAL)
 
 /* Bumped whenever the struct below changes. The frontend writes the version it

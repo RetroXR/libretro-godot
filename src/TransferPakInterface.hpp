@@ -26,9 +26,7 @@
 extern "C" {
 #endif
 
-/* Provisional, and EXPERIMENTAL until upstream assigns it: a retroXR number
- * past every one upstream libretro has assigned or has an open proposal for.
- * Upstream took 94-106 after retroXR first numbered these calls there. */
+/* Provisional; EXPERIMENTAL until upstream assigns a number. */
 #define RETRO_ENVIRONMENT_GET_TRANSFER_PAK_INTERFACE       (108 | RETRO_ENVIRONMENT_EXPERIMENTAL)
 
 /* How many controllers may hold a pak. Matches GAME_CONTROLLERS_COUNT; declared
