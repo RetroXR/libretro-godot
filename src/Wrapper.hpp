@@ -25,6 +25,7 @@
 #include <array>
 #include "TransferPakInterface.hpp"
 #include "NfcReader.hpp"
+#include "VideoViews.hpp"
 #include <deque>
 #include <iterator>
 #include <unordered_map>
@@ -109,6 +110,12 @@ public:
     /// The picture's shape. See VideoHandler::GetGeometry / GetGeometrySerial.
     VideoGeometry GetVideoGeometry() const;
     uint32_t GetVideoGeometrySerial() const;
+    std::vector<VideoView> GetVideoViews() const;
+    /// RETRO_ENVIRONMENT_SET_GEOMETRY: the video handler's shape, and the base
+    /// size recorded with the AV info, so a later SET_SYSTEM_AV_INFO that only
+    /// changes the frame rate is not read as a resize (which rebuilds a hardware
+    /// context, and Cemu closes the title when its context goes).
+    bool SetGeometry(const retro_game_geometry* geometry);
 
     /// Whether the core asked for the controller display interface.
     bool HasControllerScreens() const;

@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <vector>
 
 #if defined(_WIN32) || (defined(__linux__) && !defined(__ANDROID__))
 #include <SDL3/SDL_video.h>
@@ -15,6 +16,7 @@
 
 #include <libretro.h>
 #include "VideoGeometry.hpp"
+#include "VideoViews.hpp"
 #include "VulkanContext.hpp"
 #include "VideoTransferStats.hpp"
 #include <godot_cpp/variant/dictionary.hpp>
@@ -84,6 +86,16 @@ public:
     /// Bumped every time GetGeometry() would answer differently, so a screen can
     /// ask one integer per frame and only fetch the copy when it moved.
     uint32_t GetGeometrySerial() const { return m_geometry_serial.load(std::memory_order_acquire); }
+
+    /// RETRO_ENVIRONMENT_SET_VIDEO_VIEWS / GET_VIDEO_VIEWS_STATUS. The map is
+    /// kept beside the geometry (same mutex, same serial), so a screen that
+    /// already watches the serial sees a new map too.
+    bool SetVideoViews(const retro_video_views* views);
+    bool GetVideoViewsStatus(unsigned* status) const;
+    /// The views that fit the latest frame, or none: a frame some view does not
+    /// fit, and a rotated frame (each view would rotate on its own), are shown
+    /// whole.
+    std::vector<VideoView> GetVideoViews() const;
 
     bool SetRotation(uint32_t rotation);
     bool GetOverscan(bool* overscan);
@@ -194,6 +206,8 @@ private:
     // the main thread, and the struct is several fields wide.
     mutable std::mutex m_geometry_mutex;
     VideoGeometry m_geometry;
+    std::vector<VideoView> m_views;
+    mutable bool m_logged_rotated_views = false;
     std::atomic<uint32_t> m_geometry_serial{0};
 
     /// Apply `edit` to the geometry and bump the serial if it changed anything.

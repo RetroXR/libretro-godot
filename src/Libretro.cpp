@@ -7,6 +7,9 @@
 #include "RetroAchievements.hpp"
 #include "MicrophoneLevel.hpp"
 #include "DynLib.hpp"
+#include "VideoViews.hpp"
+
+#include <godot_cpp/variant/rect2.hpp>
 
 #include <cstdio>
 #include <filesystem>
@@ -106,6 +109,28 @@ Dictionary Libretro::GetVideoGeometry() const
     d["base_height"] = static_cast<int64_t>(g.base_height);
     d["core_aspect"] = g.core_aspect;
     return d;
+}
+
+Array Libretro::GetVideoViews() const
+{
+    Array out;
+    if (!m_wrapper)
+        return out;
+    const VideoGeometry g = m_wrapper->GetVideoGeometry();
+    if (g.frame_width == 0 || g.frame_height == 0)
+        return out;
+    const float fw = static_cast<float>(g.frame_width);
+    const float fh = static_cast<float>(g.frame_height);
+    for (const VideoView& v : m_wrapper->GetVideoViews())
+    {
+        Dictionary d;
+        d["rect"] = Rect2(v.x / fw, v.y / fh, v.width / fw, v.height / fh);
+        d["screen"] = static_cast<int64_t>(v.screen);
+        d["eye"] = static_cast<int64_t>(v.eye);
+        d["aspect"] = VideoViewAspect(v);
+        out.push_back(d);
+    }
+    return out;
 }
 
 int64_t Libretro::GetVideoGeometrySerial() const
@@ -876,6 +901,7 @@ void Libretro::_bind_methods()
     ClassDB::bind_method(D_METHOD("GetVideoTexture"), &Libretro::GetVideoTexture);
     ClassDB::bind_method(D_METHOD("GetVideoGeometry"), &Libretro::GetVideoGeometry);
     ClassDB::bind_method(D_METHOD("GetVideoGeometrySerial"), &Libretro::GetVideoGeometrySerial);
+    ClassDB::bind_method(D_METHOD("GetVideoViews"), &Libretro::GetVideoViews);
     ClassDB::bind_method(D_METHOD("HasControllerScreens"), &Libretro::HasControllerScreens);
     ClassDB::bind_method(D_METHOD("GetControllerScreenTexture", "port", "index"), &Libretro::GetControllerScreenTexture, DEFVAL(0));
     ClassDB::bind_method(D_METHOD("GetDeviceScreenTexture", "location", "port", "index"), &Libretro::GetDeviceScreenTexture, DEFVAL(0));

@@ -299,7 +299,7 @@ bool EnvironmentHandler::Callback(uint32_t cmd, void* data)
     case RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO:                                  return instance->m_environment_handler->SetSubsystemInfo(static_cast<const retro_subsystem_info*>(data));
     case RETRO_ENVIRONMENT_SET_CONTROLLER_INFO:                                 return instance->m_input_handler->SetControllerInfo(static_cast<const retro_controller_info*>(data));
     case RETRO_ENVIRONMENT_SET_MEMORY_MAPS:                                     return instance->m_environment_handler->SetMemoryMaps(static_cast<const retro_memory_map*>(data));
-    case RETRO_ENVIRONMENT_SET_GEOMETRY:                                        return instance->m_video_handler->SetGeometry(static_cast<const retro_game_geometry*>(data));
+    case RETRO_ENVIRONMENT_SET_GEOMETRY:                                        return instance->SetGeometry(static_cast<const retro_game_geometry*>(data));
     case RETRO_ENVIRONMENT_GET_USERNAME:                                        return instance->m_environment_handler->GetUsername(static_cast<const char**>(data));
     case RETRO_ENVIRONMENT_GET_LANGUAGE:                                        return instance->m_environment_handler->GetLanguage(static_cast<retro_language*>(data));
     // Optional per-frame optimization (core renders straight into our framebuffer);
@@ -364,6 +364,8 @@ bool EnvironmentHandler::Callback(uint32_t cmd, void* data)
     case RETRO_ENVIRONMENT_GET_TRANSFER_PAK_INTERFACE:                           return instance->m_environment_handler->GetTransferPakInterface(static_cast<retro_transfer_pak_interface*>(data), instance);
     case RETRO_ENVIRONMENT_GET_CONTROLLER_AUDIO_INTERFACE:                       return instance->m_environment_handler->GetControllerAudioInterface(static_cast<retro_controller_audio_interface*>(data), instance);
     case RETRO_ENVIRONMENT_GET_CONTROLLER_DISPLAY_INTERFACE:                     return instance->m_environment_handler->GetControllerDisplayInterface(static_cast<retro_controller_display_interface*>(data), instance);
+    case RETRO_ENVIRONMENT_SET_VIDEO_VIEWS:                                      return instance->m_video_handler->SetVideoViews(static_cast<const retro_video_views*>(data));
+    case RETRO_ENVIRONMENT_GET_VIDEO_VIEWS_STATUS:                               return instance->m_video_handler->GetVideoViewsStatus(static_cast<unsigned*>(data));
     case RETRO_ENVIRONMENT_GET_DEVICE_DISPLAY_INTERFACE:                         return instance->m_environment_handler->GetDeviceDisplayInterface(static_cast<retro_device_display_interface*>(data), instance);
     case RETRO_ENVIRONMENT_SET_ACCESSORY_INTERFACE:                        return instance->m_environment_handler->SetAccessoryInterface(static_cast<const retro_accessory_interface*>(data), instance);
     case RETRO_ENVIRONMENT_GET_NFC_INTERFACE:                                    return instance->m_environment_handler->GetNfcInterface(static_cast<retro_nfc_interface*>(data));

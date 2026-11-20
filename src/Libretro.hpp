@@ -212,6 +212,12 @@ public:
     /// integer per frame is the cheap way to learn the picture changed shape.
     int64_t GetVideoGeometrySerial() const;
 
+    /// The core's video views (RETRO_ENVIRONMENT_SET_VIDEO_VIEWS) that fit the
+    /// current frame: an Array of {rect: Rect2 normalized to the frame, screen,
+    /// eye, aspect}. Empty when the core sent none, or the frame is shown whole.
+    /// Changes bump GetVideoGeometrySerial().
+    godot::Array GetVideoViews() const;
+
     /// Whether the core asked for the controller display interface, which it
     /// uses to hand device screens such as a VMU's LCD over separately.
     bool HasControllerScreens() const;

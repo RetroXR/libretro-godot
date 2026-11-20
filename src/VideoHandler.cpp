@@ -1,5 +1,7 @@
 #include "VideoHandler.hpp"
 
+#include <cstdlib>
+
 #include <godot_cpp/classes/mesh_instance3d.hpp>
 
 #if defined(_WIN32) || (defined(__linux__) && !defined(__ANDROID__))
@@ -621,6 +623,86 @@ bool VideoHandler::SetRotation(uint32_t rotation)
     m_rotation = rotation;
     EditGeometry([&](VideoGeometry& g) { g.rotation = rotation; });
     return true;
+}
+
+bool VideoHandler::SetVideoViews(const retro_video_views* map)
+{
+    if (!map)
+        return false;
+    if (map->num_views > 0 && !map->views)
+    {
+        LogWarning("[Views] refused: " + std::to_string(map->num_views) + " views and no array");
+        return false;
+    }
+
+    std::vector<VideoView> views;
+    views.reserve(map->num_views);
+    for (unsigned i = 0; i < map->num_views && i < kVideoViewsMax; ++i)
+    {
+        const retro_video_view& v = map->views[i];
+        views.push_back({v.x, v.y, v.width, v.height, v.screen, v.eye, v.aspect_ratio});
+    }
+    if (map->num_views > kVideoViewsMax || !ValidateVideoViews(views))
+    {
+        LogWarning("[Views] refused an invalid map of " + std::to_string(map->num_views) + " views");
+        return false;
+    }
+
+    std::lock_guard<std::mutex> lock(m_geometry_mutex);
+    bool same = views.size() == m_views.size();
+    for (size_t i = 0; same && i < views.size(); ++i)
+    {
+        const VideoView& a = views[i];
+        const VideoView& b = m_views[i];
+        same = a.x == b.x && a.y == b.y && a.width == b.width && a.height == b.height &&
+               a.screen == b.screen && a.eye == b.eye && a.aspect == b.aspect;
+    }
+    if (same)
+        return true;   // the core resends every retro_run; only a change is news
+
+    std::string desc;
+    for (const VideoView& v : views)
+        desc += " [screen " + std::to_string(v.screen) + " eye " + std::to_string(v.eye) + " " +
+                std::to_string(v.x) + "," + std::to_string(v.y) + " " +
+                std::to_string(v.width) + "x" + std::to_string(v.height) + "]";
+    LogWarning("[Views] map of " + std::to_string(views.size()) + " views:" + (desc.empty() ? " cleared" : desc));
+
+    m_views = std::move(views);
+    m_geometry_serial.fetch_add(1, std::memory_order_release);
+    return true;
+}
+
+bool VideoHandler::GetVideoViewsStatus(unsigned* status) const
+{
+    if (!status)
+        return false;
+    // Presented as screens in the room; no stereo pairs, no head tracking.
+    // XENU_NO_VIDEO_VIEWS=1 answers "not presented": a probe's control leg.
+    static const bool s_off = [] {
+        const char* v = std::getenv("XENU_NO_VIDEO_VIEWS");
+        return v && *v && *v != '0';
+    }();
+    *status = s_off ? 0u : RETRO_VIDEO_VIEWS_STATUS_PRESENTS;
+    return true;
+}
+
+std::vector<VideoView> VideoHandler::GetVideoViews() const
+{
+    std::lock_guard<std::mutex> lock(m_geometry_mutex);
+    if (m_views.empty())
+        return {};
+    if (m_geometry.rotation != 0)
+    {
+        if (!m_logged_rotated_views)
+        {
+            m_logged_rotated_views = true;
+            LogWarning("[Views] frame is rotated; showing it whole, the map is not rotated per view");
+        }
+        return {};
+    }
+    if (!VideoViewsFit(m_views, m_geometry.frame_width, m_geometry.frame_height))
+        return {};
+    return m_views;
 }
 
 VideoGeometry VideoHandler::GetGeometry() const

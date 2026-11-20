@@ -326,6 +326,26 @@ VideoGeometry Wrapper::GetVideoGeometry() const
     return m_video_handler ? m_video_handler->GetGeometry() : VideoGeometry{};
 }
 
+bool Wrapper::SetGeometry(const retro_game_geometry* geometry)
+{
+    if (!geometry)
+        return true;
+    if (geometry->base_width != m_system_av_info.geometry.base_width ||
+        geometry->base_height != m_system_av_info.geometry.base_height)
+        Log("SET_GEOMETRY: base " + std::to_string(m_system_av_info.geometry.base_width) + "x" +
+            std::to_string(m_system_av_info.geometry.base_height) + " -> " +
+            std::to_string(geometry->base_width) + "x" + std::to_string(geometry->base_height));
+    m_system_av_info.geometry.base_width = geometry->base_width;
+    m_system_av_info.geometry.base_height = geometry->base_height;
+    m_system_av_info.geometry.aspect_ratio = geometry->aspect_ratio;
+    return m_video_handler ? m_video_handler->SetGeometry(geometry) : true;
+}
+
+std::vector<VideoView> Wrapper::GetVideoViews() const
+{
+    return m_video_handler ? m_video_handler->GetVideoViews() : std::vector<VideoView>{};
+}
+
 uint32_t Wrapper::GetVideoGeometrySerial() const
 {
     return m_video_handler ? m_video_handler->GetGeometrySerial() : 0u;
