@@ -61,7 +61,20 @@ enum retro_accessory_kind
 {
    /* A Nintendo e-Reader dot-code strip, as raw decoded data (the .raw / .bin
     * a strip scanner or nedcenc writes). */
-   RETRO_ACCESSORY_DOT_CODE = 0
+   RETRO_ACCESSORY_DOT_CODE = 0,
+   /* A Skylanders figure, as the 1024-byte MIFARE Classic 1K dump of its tag.
+    * Each reader of this kind is a figure on the Portal of Power; the portal
+    * holds them all at once, so a frontend may fill every one. */
+   RETRO_ACCESSORY_SKYLANDER = 1,
+   /* A Disney Infinity figure, Play Set or Power Disc, as its tag's 320-byte
+    * dump. The n-th reader of this kind is the Infinity Base's position n:
+    * 0-2 the hexagon (a Play Set or Power Disc, then two more discs), 3-5
+    * player one (the figure, then its two ability discs), 6-8 player two. */
+   RETRO_ACCESSORY_INFINITY_FIGURE = 2,
+   /* A Lego Dimensions minifigure or vehicle tag, as its 180-byte NTAG213
+    * dump. The n-th reader of this kind is the Toy Pad's slot n: 1 the centre
+    * pad, 0, 3 and 4 the left pad, 2, 5 and 6 the right pad. */
+   RETRO_ACCESSORY_DIMENSIONS_TAG = 3
 };
 
 /* The reader takes a medium only for a moment and lets go of it by itself: a
