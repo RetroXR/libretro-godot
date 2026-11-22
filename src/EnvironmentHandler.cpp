@@ -155,7 +155,7 @@ static bool runloop_clear_all_thread_waits(uint32_t clear_threads, void* data)
     X(RETRO_ENVIRONMENT_GET_CONTROLLER_DISPLAY_INTERFACE) \
     X(RETRO_ENVIRONMENT_GET_DEVICE_DISPLAY_INTERFACE) \
     X(RETRO_ENVIRONMENT_SET_ACCESSORY_INTERFACE) \
-    X(RETRO_ENVIRONMENT_GET_NFC_INTERFACE) \
+    X(RETRO_ENVIRONMENT_GET_NFC_INTERFACE)     X(RETRO_ENVIRONMENT_GET_JOYPAD_ID_COUNT) \
     X(RETRO_ENVIRONMENT_GET_PLAYLIST_DIRECTORY) \
     X(RETRO_ENVIRONMENT_GET_FILE_BROWSER_START_DIRECTORY) \
     X(RETRO_ENVIRONMENT_RETROARCH_START_BLOCK) \
@@ -369,6 +369,17 @@ bool EnvironmentHandler::Callback(uint32_t cmd, void* data)
     case RETRO_ENVIRONMENT_GET_DEVICE_DISPLAY_INTERFACE:                         return instance->m_environment_handler->GetDeviceDisplayInterface(static_cast<retro_device_display_interface*>(data), instance);
     case RETRO_ENVIRONMENT_SET_ACCESSORY_INTERFACE:                        return instance->m_environment_handler->SetAccessoryInterface(static_cast<const retro_accessory_interface*>(data), instance);
     case RETRO_ENVIRONMENT_GET_NFC_INTERFACE:                                    return instance->m_environment_handler->GetNfcInterface(static_cast<retro_nfc_interface*>(data));
+    // Ids 0-31: the input word is 32 bits (InputHandler::m_joypad_buttons), and a
+    // core reads past the RetroPad's sixteen only after asking (JoypadIdCount.hpp).
+    // XENU_NO_JOYPAD_ID_COUNT=1 refuses it as RetroArch does: a probe's control leg.
+    case RETRO_ENVIRONMENT_GET_JOYPAD_ID_COUNT:
+    {
+        const char* off = std::getenv("XENU_NO_JOYPAD_ID_COUNT");
+        if (!data || (off && *off && *off != '0'))
+            return false;
+        *static_cast<unsigned*>(data) = 32;
+        return true;
+    }
     case RETRO_ENVIRONMENT_GET_PLAYLIST_DIRECTORY:                              return EnvironmentNotImplemented(cmd);
     case RETRO_ENVIRONMENT_GET_FILE_BROWSER_START_DIRECTORY:                    return EnvironmentNotImplemented(cmd);
     // custom environment commands

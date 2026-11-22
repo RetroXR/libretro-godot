@@ -9,6 +9,7 @@
 
 #include "AccessoryInterface.hpp"
 #include "NfcInterface.hpp"
+#include "JoypadIdCount.hpp"
 #include "ControllerAudioInterface.hpp"
 #include "ControllerDisplayInterface.hpp"
 #include "DeviceDisplayInterface.hpp"
