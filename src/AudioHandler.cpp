@@ -1123,10 +1123,58 @@ bool AudioHandler::PushControllerFrames(unsigned location, unsigned port, unsign
         }
     }
 
-    // A right voice of -1 downmixes to the one voice.
+    // Stereo asked for: a right voice beside the left, filled with silence to the
+    // left's depth so the two play in step. Asked off: the right voice goes back.
+    int right = cv.right.load(std::memory_order_relaxed);
+    const bool stereo = cv.stereo.load(std::memory_order_relaxed);
+    if (stereo && right < 0)
+    {
+        right = static_cast<int>(mx->call("create_voice"));
+        if (right >= 0)
+        {
+            const int depth = static_cast<int>(mx->call("voice_frames_available", voice));
+            if (depth > 0)
+            {
+                cv.push_buf.resize(static_cast<int64_t>(depth));
+                cv.push_buf.fill(Vector2());
+                mx->call("push_stereo_frames", right, -1, cv.push_buf, 0);
+            }
+            cv.right.store(right, std::memory_order_release);
+            Log(std::string("AudioHandler: controller ") + std::to_string(port) + "." + std::to_string(index)
+                + " plays in stereo, left voice " + std::to_string(voice) + ", right " + std::to_string(right));
+        }
+        else
+            LogWarning("AudioHandler: no free voice for a controller's right channel; it stays mono");
+    }
+    else if (!stereo && right >= 0)
+    {
+        cv.right.store(-1, std::memory_order_release);
+        mx->call("destroy_voice", right);
+        right = -1;
+        Log(std::string("AudioHandler: controller ") + std::to_string(port) + "." + std::to_string(index)
+            + " back to one voice");
+    }
+
+    // A right voice of -1 downmixes to the one voice; with one, L and R go apart.
     FillStereoBuffer(cv.push_buf, out, out_frames);
-    mx->call("push_stereo_frames", voice, -1, cv.push_buf, 0);
+    mx->call("push_stereo_frames", voice, right, cv.push_buf, 0);
     return true;
+}
+
+int AudioHandler::GetControllerRightVoiceId(unsigned location, unsigned port, unsigned index) const
+{
+    if (location >= k_device_locations || port >= k_controller_ports || index >= k_controller_devices)
+        return -1;
+    return m_controller_voices[(location * k_controller_ports + port) * k_controller_devices + index]
+        .right.load(std::memory_order_acquire);
+}
+
+void AudioHandler::SetControllerStereo(unsigned location, unsigned port, unsigned index, bool stereo)
+{
+    if (location >= k_device_locations || port >= k_controller_ports || index >= k_controller_devices)
+        return;
+    m_controller_voices[(location * k_controller_ports + port) * k_controller_devices + index]
+        .stereo.store(stereo, std::memory_order_relaxed);
 }
 
 int AudioHandler::GetControllerVoiceId(unsigned location, unsigned port, unsigned index) const
@@ -1151,6 +1199,9 @@ void AudioHandler::ReleaseControllerVoices(bool destroy_voices)
         const int voice = cv.voice.exchange(-1, std::memory_order_acq_rel);
         if (mx && voice >= 0)
             mx->call("destroy_voice", voice);
+        const int right = cv.right.exchange(-1, std::memory_order_acq_rel);
+        if (mx && right >= 0)
+            mx->call("destroy_voice", right);
     }
 }
 
@@ -1164,6 +1215,9 @@ void AudioHandler::FlushControllerVoices()
         const int voice = cv.voice.load(std::memory_order_acquire);
         if (voice >= 0)
             mx->call("flush_voice", voice);
+        const int right = cv.right.load(std::memory_order_acquire);
+        if (right >= 0)
+            mx->call("flush_voice", right);
     }
 }
 

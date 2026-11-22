@@ -277,6 +277,12 @@ public:
     /// The voice a device at `location` (0 a controller, 1 a memory card slot)
     /// plays on, or -1 until it has made a sound: a docked PocketStation is (1, slot, 0).
     int GetDeviceAudioVoiceId(int location, int port, int index);
+    /// Play controller device `index` on `port` on two voices, left and right
+    /// (GetControllerAudioVoiceId the left, GetControllerAudioRightVoiceId the
+    /// right), rather than one: a Wii U GamePad's two speakers. Off by default.
+    void SetControllerAudioStereo(int port, int index, bool stereo);
+    /// The right voice of a stereo controller device, or -1 (mono, or no sound yet).
+    int GetControllerAudioRightVoiceId(int port, int index);
 
     /// True once the audio sink is up and a backend has actually been chosen.
     ///

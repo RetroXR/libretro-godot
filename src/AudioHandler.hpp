@@ -208,6 +208,13 @@ public:
     /// The voice device `index` on `port` at `location` plays on, or -1 until it
     /// has made a sound. GDScript positions it; it does not own it.
     int GetControllerVoiceId(unsigned location, unsigned port, unsigned index) const;
+    /// The device's RIGHT voice while it plays in stereo (SetControllerStereo), else
+    /// -1; GetControllerVoiceId is then its left.
+    int GetControllerRightVoiceId(unsigned location, unsigned port, unsigned index) const;
+    /// Play device `index` on `port` at `location` on two voices, left and right,
+    /// rather than folding it to one (a Wii U GamePad's two speakers). Off for
+    /// every device until asked; taken up on the device's next block.
+    void SetControllerStereo(unsigned location, unsigned port, unsigned index, bool stereo);
 
 private:
     // --- fallback: Godot's own 3D panning -----------------------------------
@@ -280,6 +287,9 @@ private:
     struct ControllerVoice
     {
         std::atomic<int> voice{-1};
+        /// The right voice while `stereo` (voice is then the left), else -1.
+        std::atomic<int> right{-1};
+        std::atomic<bool> stereo{false};
         void* resampler = nullptr;
         const struct retro_resampler* backend = nullptr;
         std::vector<float> in_float;
