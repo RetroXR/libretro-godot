@@ -179,12 +179,12 @@ bool InputHandler::RumbleInterfaceSetRumbleState(uint32_t port, retro_rumble_eff
     return true;
 }
 
-void InputHandler::SetJoypadButtonStates(uint32_t port, uint16_t states)
+void InputHandler::SetJoypadButtonStates(uint32_t port, uint32_t states)
 {
     std::lock_guard<std::recursive_mutex> lock(m_state_mutex);
     m_joypad_buttons[port] = states;
 }
-uint16_t InputHandler::GetJoypadButtonStates(uint32_t port)
+uint32_t InputHandler::GetJoypadButtonStates(uint32_t port)
 {
     std::lock_guard<std::recursive_mutex> lock(m_state_mutex);
     return m_joypad_buttons[port];
@@ -647,12 +647,13 @@ bool InputHandler::SetKeyboardEventCallback(const retro_keyboard_callback* keybo
 int16_t InputHandler::ProcessJoypadDevice(uint32_t port, uint32_t id)
 {
     std::lock_guard<std::recursive_mutex> lock(m_state_mutex);
-    uint16_t buttons = m_joypad_buttons[port];
+    uint32_t buttons = m_joypad_buttons[port];
     const auto extra = m_joypad_extra.find(port);
     if (extra != m_joypad_extra.end())
         buttons |= extra->second;
+    // The mask is libretro's sixteen; an id from 16 up is asked for by itself.
     if (id == RETRO_DEVICE_ID_JOYPAD_MASK)
-        return static_cast<int16_t>(buttons);
+        return static_cast<int16_t>(buttons & 0xFFFFu);
     return ButtonFromMask(buttons, id);
 }
 

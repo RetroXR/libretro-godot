@@ -71,7 +71,7 @@ public:
     /// a replay can poll keyboard/mouse/sensor state from the abandoned future.
     struct NetplayState
     {
-        std::unordered_map<uint32_t, uint16_t> joypad_buttons;
+        std::unordered_map<uint32_t, uint32_t> joypad_buttons;
         std::unordered_map<uint32_t, int16_t> mouse_x;
         std::unordered_map<uint32_t, int16_t> mouse_y;
         std::unordered_map<uint32_t, uint32_t> mouse_buttons;
@@ -91,8 +91,8 @@ public:
     NetplayState CaptureNetplayState() const;
     void RestoreNetplayState(const NetplayState& state);
 
-    void SetJoypadButtonStates(uint32_t port, uint16_t states);
-    uint16_t GetJoypadButtonStates(uint32_t port);
+    void SetJoypadButtonStates(uint32_t port, uint32_t states);
+    uint32_t GetJoypadButtonStates(uint32_t port);
     /// Bits ORed into every joypad read of `port`, for a button that belongs to a
     /// peripheral rather than to the controller writing the port's mask.
     void SetJoypadExtraButtons(uint32_t port, uint16_t buttons);
@@ -206,7 +206,10 @@ public:
 
 private:
 
-    std::unordered_map<uint32_t, uint16_t> m_joypad_buttons;
+    /// Ids 0-15 are libretro's RetroPad; 16-31 are buttons a core reads past it,
+    /// by RetroXR's own numbering (16 = HOME, RETROXR_JOYPAD_ID_HOME in the Cemu
+    /// fork). RETRO_DEVICE_ID_JOYPAD_MASK answers only the first 16.
+    std::unordered_map<uint32_t, uint32_t> m_joypad_buttons;
     // Not in NetplayState: cleared when netplay starts, refused on its ports.
     std::unordered_map<uint32_t, uint16_t> m_joypad_extra;
 

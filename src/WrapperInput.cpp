@@ -396,7 +396,7 @@ void Wrapper::SetLightgunButton(uint32_t port, int button_id, bool pressed)
     m_input_handler->SetLightgunButtons(port, buttons);
 }
 
-void Wrapper::SetJoypadState(uint32_t port, uint16_t button_mask, int16_t analog_lx, int16_t analog_ly, int16_t analog_rx, int16_t analog_ry)
+void Wrapper::SetJoypadState(uint32_t port, uint32_t button_mask, int16_t analog_lx, int16_t analog_ly, int16_t analog_rx, int16_t analog_ry)
 {
     if (!m_input_handler)
         return;
@@ -412,7 +412,7 @@ void Wrapper::SetJoypadState(uint32_t port, uint16_t button_mask, int16_t analog
         {
             std::lock_guard<std::mutex> lock(m_np_mutex);
             int32_t* v = m_np_live_local.data() + port * 5;
-            v[0] = button_mask;
+            v[0] = static_cast<int32_t>(button_mask);
             v[1] = analog_lx; v[2] = analog_ly;
             v[3] = analog_rx; v[4] = analog_ry;
         }

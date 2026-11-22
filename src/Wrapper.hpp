@@ -160,7 +160,7 @@ public:
 
     /// Per-port joypad input. Replaces the hardcoded port-0 path in _process for
     /// physical controller objects that know their own port assignment.
-    void SetJoypadState(uint32_t port, uint16_t button_mask, int16_t analog_lx, int16_t analog_ly, int16_t analog_rx, int16_t analog_ry);
+    void SetJoypadState(uint32_t port, uint32_t button_mask, int16_t analog_lx, int16_t analog_ly, int16_t analog_rx, int16_t analog_ry);
     /// Read the frontend's buffered joypad state without consuming it. This is
     /// useful for diagnostics and no-core integration tests; values are
     /// [buttons, left_x, left_y, right_x, right_y].

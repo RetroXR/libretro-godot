@@ -299,7 +299,7 @@ void Libretro::SetJoypadState(int port, int button_mask, int analog_lx, int anal
 {
     m_wrapper->SetJoypadState(
         static_cast<uint32_t>(port),
-        static_cast<uint16_t>(button_mask),
+        static_cast<uint32_t>(button_mask),
         static_cast<int16_t>(analog_lx),
         static_cast<int16_t>(analog_ly),
         static_cast<int16_t>(analog_rx),

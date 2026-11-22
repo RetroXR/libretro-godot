@@ -283,7 +283,7 @@ void Wrapper::ApplyNetplayInputs(const NpFrame& inputs, uint32_t mask)
             m_input_handler->SetLightgunIsOffscreen(port, v[3] ? 1 : 0);
             continue;
         }
-        m_input_handler->SetJoypadButtonStates(port, static_cast<uint16_t>(v[0]));
+        m_input_handler->SetJoypadButtonStates(port, static_cast<uint32_t>(v[0]));
         m_input_handler->SetAnalogLeft(port, static_cast<int16_t>(v[1]), static_cast<int16_t>(v[2]));
         m_input_handler->SetAnalogRight(port, static_cast<int16_t>(v[3]), static_cast<int16_t>(v[4]));
     }
