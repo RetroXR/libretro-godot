@@ -683,11 +683,15 @@ Dictionary Libretro::GetPacingStats()
 
 void Libretro::SetVideoTransferProfiling(bool enabled)
 {
+    if (!m_wrapper || !m_wrapper->m_video_handler)
+        return;
     m_wrapper->m_video_handler->SetTransferProfiling(enabled);
 }
 
 Dictionary Libretro::GetVideoTransferStats() const
 {
+    if (!m_wrapper || !m_wrapper->m_video_handler)
+        return Dictionary();
     return m_wrapper->m_video_handler->GetTransferStats();
 }
 
