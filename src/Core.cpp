@@ -218,18 +218,37 @@ bool Core::Load(CallbackTrampolines* trampolines)
     return true;
 }
 
+// Cores whose static destructors crash when the library is closed, so they stay
+// mapped for the rest of the process. mame2010 keeps its running_machine in a
+// global resource_pool; dlclose destroys it after retro_deinit freed the options
+// it writes to (SIGSEGV in options_set_bool under __cxa_finalize).
+static bool KeepsLibraryLoaded(const std::string& name)
+{
+    static const char* const s_names[] = { "mame2010" };
+    for (const char* n : s_names)
+        if (name == n)
+            return true;
+    return false;
+}
+
 void Core::Unload()
 {
+    const bool keep_loaded = KeepsLibraryLoaded(m_name);
     if (m_handle)
     {
-        DynLib_Close(m_handle);
+        if (keep_loaded)
+            Log("Core left loaded (its destructors crash on unload): " + m_name);
+        else
+            DynLib_Close(m_handle);
         m_handle = nullptr;
     }
 
     if (!m_temporary_path.empty())
     {
+        // Unlinking a mapped .so is fine; Windows refuses a mapped DLL, and a later
+        // sweep takes it once the process has gone.
         std::error_code remove_ec;
-        if (!std::filesystem::remove(m_temporary_path, remove_ec) && remove_ec)
+        if (!std::filesystem::remove(m_temporary_path, remove_ec) && remove_ec && !keep_loaded)
             LogError("Failed to remove temporary core file: " + m_temporary_path + " - " + remove_ec.message());
         m_temporary_path.clear();
     }
